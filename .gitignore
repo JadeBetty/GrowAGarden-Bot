@@ -1,0 +1,5 @@
+config.json
+.env
+package-lock.json
+node_modules
+json.sqlite

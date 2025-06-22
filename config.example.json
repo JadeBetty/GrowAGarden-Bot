@@ -1,0 +1,17 @@
+{
+  "clientId": "",
+  "alertChannelId": "",
+  "choices": [
+    { "name": "Sugar Apple", "value": "seed.sugar" },
+    { "name": "Feijoa", "value": "seed.feijoa" },
+    { "name": "Pineapple", "value": "seed.pineapple"},
+    { "name": "Loquat", "value": "seed.loquat"},
+    { "name": "Prickly Pear", "value": "seed.prickly-pear"},
+    { "name": "Bell Pepper", "value": "seed.bell"},
+    { "name": "Master Sprinkler", "value": "gear.master" },
+    { "name": "Bug Egg", "value": "egg.bug" },
+    { "name": "Mythical Egg", "value": "egg.mythical" },
+    { "name": "Paradise Egg", "value": "egg.paradise" },
+    { "name": "Common Egg", "value": "egg.common"}
+  ]
+}
