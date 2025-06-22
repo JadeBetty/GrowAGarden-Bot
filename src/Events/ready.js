@@ -12,7 +12,7 @@ module.exports = {
     const stockChannel = await client.channels.fetch("1381637521728868474");
     let lastUpdatedAt = null;
     logger.success(`Logged in as ${client.user.tag}`);
-    client.user.setActivity("GAG", { type: Discord.ActivityType.Playing });
+    client.user.setActivity("Grow A Garden", { type: Discord.ActivityType.Playing });
 
     function sleep(ms) {
       return new Promise((resolve) => setTimeout(resolve, ms));
@@ -33,13 +33,8 @@ module.exports = {
     }
 
     function isAtThirtyMinuteMark() {
-      const now = new Date();
-      const mins = now.getMinutes();
-      const secs = now.getSeconds();
-      if ((mins === 0 || mins === 30) && secs < 180) {
-        return true;
-      }
-      return false;
+      const mins = new Date().getMinutes();
+      return mins < 5 || (mins >= 30 && mins < 35);
     }
 
     async function startStockLoop() {
@@ -65,7 +60,9 @@ module.exports = {
             : ` with role pings: ${pingRoles}`
         }`
       );
-      logger.info(`Last updated: ${new Date(rawData.Data.updatedAt).toLocaleTimeString()}`)
+      logger.info(
+        `Last updated: ${new Date(rawData.Data.updatedAt).toLocaleTimeString()}`
+      );
       logger.table(rawData.Data.gear);
       logger.table(rawData.Data.seeds);
       logger.table(rawData.Data.egg);
@@ -85,14 +82,18 @@ module.exports = {
             freshEmbed = embed;
             newRawData = rawData;
             changed = true;
-            logger.success(`[Stock] New stock detected. ${new Date(updatedAt).toLocaleTimeString()}`);
+            logger.success(
+              `[Stock] New stock detected. ${new Date(
+                updatedAt
+              ).toLocaleTimeString()}`
+            );
             hasLoggedEntry = false;
           } else {
             if (!hasLoggedEntry) {
               logger.error(
-                `[Stock] Hasn't updated, retry in 10s. ${Date.now()}`
+                `[Stock] Hasn't updated, retrying every 10s.`
               );
-              hasLoggedEntry = true;
+              // hasLoggedEntry = true;
             }
             await sleep(10 * 1000);
           }
@@ -111,7 +112,7 @@ module.exports = {
 
           logger.success(
             `[Stock] Sent new embed${
-              pingRoles == null
+              pingRoles.length === 0
                 ? "s without any role pings."
                 : ` with role pings: ${pingRoles}`
             }`
@@ -176,7 +177,7 @@ module.exports = {
             if (hasItem) {
               if (category === "egg" && !isAtThirtyMinuteMark()) {
                 logger.warn(
-                  `[Alert] Egg ${itemName} in stock, but skipping notification (not near 0/30 min).`
+                  `[Alert] Egg ${itemName} in stock, but skipping notification after 5 mins of the half-hour, hour.`
                 );
                 continue;
               }

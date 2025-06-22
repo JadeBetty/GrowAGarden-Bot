@@ -80,6 +80,9 @@ function getEmoji(name) {
   if (lower.includes("harvest")) return "🌾";
   if (lower.includes("tanning")) return "🕶";
   if (lower.includes("avocado")) return "🥑";
+  if (lower.includes("banana")) return "🍌";
+  if (lower.includes("cauliflower")) return "🥦";
+  if (lower.includes("loquat")) return "🍊";
   return "❓";
 }
 
