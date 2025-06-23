@@ -12,11 +12,14 @@ module.exports = {
     const stockChannel = await client.channels.fetch("1381637521728868474");
     let lastUpdatedAt = null;
     logger.success(`Logged in as ${client.user.tag}`);
-    client.user.setActivity("Grow A Garden", { type: Discord.ActivityType.Playing });
+    client.user.setActivity("Grow A Garden", {
+      type: Discord.ActivityType.Playing,
+    });
 
     function sleep(ms) {
       return new Promise((resolve) => setTimeout(resolve, ms));
     }
+
 
     async function waitUntilNextFiveMinuteMark() {
       const now = new Date();
@@ -24,9 +27,13 @@ module.exports = {
       const secs = now.getSeconds();
       const ms = now.getMilliseconds();
 
-      const nextMins = Math.ceil(mins / 5) * 5;
+      const nextMins = Math.ceil((mins + 1) / 5) * 5;
       const diffMins = nextMins - mins;
-      const waitMs = diffMins * 60 * 1000 - secs * 1000 - ms;
+      let waitMs = diffMins * 60 * 1000 - secs * 1000 - ms;
+
+      if (waitMs <= 0) {
+        waitMs = (5 * 60 * 1000) + waitMs; // Add 5 minutes
+      }
 
       logger.info(`Next 5-min mark in ${Math.round(waitMs / 1000)} seconds`);
       await sleep(waitMs);
@@ -38,7 +45,7 @@ module.exports = {
     }
 
     async function startStockLoop() {
-      const {
+      let {
         embed: firstEmbed,
         updatedAt: firstUpdatedAt,
         rawData,
@@ -67,36 +74,57 @@ module.exports = {
       logger.table(rawData.Data.seeds);
       logger.table(rawData.Data.egg);
       await handleUserDMs(rawData);
+
+      // Add flag to skip first check after startup
+      let isFirstCheck = true;
+
       while (true) {
         await waitUntilNextFiveMinuteMark();
+
+        // Skip the first check after startup since we just sent the initial embed
+        if (isFirstCheck) {
+          logger.info("[Stock] Skipping first check after startup - using current data as baseline");
+          isFirstCheck = false;
+          continue;
+        }
+
+        // Wait an additional 10 seconds after the 5-minute mark to ensure stock has updated
+        logger.info("[Stock] Waiting 10 seconds for stock server to update...");
+        await sleep(10000);
 
         let freshEmbed = null;
         let newRawData = null;
         let changed = false;
-        let hasLoggedEntry = false;
+        let lastDataString = JSON.stringify({
+          seeds: rawData.Data.seeds,
+          gear: rawData.Data.gear,
+          egg: rawData.Data.egg,
+        });
 
         while (!changed) {
-          const { embed, updatedAt, rawData } = await updateStock();
-          if (updatedAt !== lastUpdatedAt) {
-            lastUpdatedAt = updatedAt;
-            freshEmbed = embed;
-            newRawData = rawData;
+          const stockUpdate = await updateStock();
+          const newDataString = JSON.stringify({
+            seeds: stockUpdate.rawData.Data.seeds,
+            gear: stockUpdate.rawData.Data.gear,
+            egg: stockUpdate.rawData.Data.egg,
+          });
+
+          if (newDataString !== lastDataString) {
+            lastUpdatedAt = stockUpdate.updatedAt;
+            lastDataString = newDataString;
+            freshEmbed = stockUpdate.embed;
+            newRawData = stockUpdate.rawData;
+            rawData = stockUpdate.rawData;
             changed = true;
             logger.success(
               `[Stock] New stock detected. ${new Date(
-                updatedAt
+                stockUpdate.updatedAt
               ).toLocaleTimeString()}`
             );
-            hasLoggedEntry = false;
           } else {
-            if (!hasLoggedEntry) {
-              logger.error(
-                `[Stock] Hasn't updated, retrying every 10s.`
-              );
-              // hasLoggedEntry = true;
-            }
-            await sleep(10 * 1000);
+            logger.error(`[Stock] Hasn't updated, retrying every 5s.`);
           }
+          await sleep(5 * 1000);
         }
 
         if (freshEmbed) {

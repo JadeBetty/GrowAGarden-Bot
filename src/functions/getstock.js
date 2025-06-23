@@ -3,49 +3,41 @@ const https = require("https");
 const { QuickDB } = require("quick.db");
 const db = new QuickDB();
 
-function createOptions(path) {
-  return {
-    method: "GET",
-    hostname: "growagardenstock.com",
-    path: path,
-    headers: {
-      accept: "*/*",
-      "accept-language": "en-US,en;q=0.9",
-      referer: "https://growagardenstock.com/api/stock",
-      "user-agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 OPR/119.0.0.0",
-    },
-  };
-}
-
 function fetchStockData(path) {
   return new Promise((resolve, reject) => {
-    const options = createOptions(path);
-    const req = https.request(options, (res) => {
-      let data = "";
-      res.on("data", (chunk) => {
-        data += chunk;
-      });
-      res.on("end", () => {
-        try {
-          const parsed = JSON.parse(data);
-          resolve(parsed);
-        } catch (e) {
-          reject(new Error("Failed to parse JSON: " + e.message));
-        }
-      });
-    });
-    req.on("error", (e) => reject(e));
-    req.end();
-  });
-}
+    https
+      .get(`https://www.gamersberg.com/${path}`, (res) => {
+        let data = "";
+        res.on("data", (chunk) => (data += chunk));
+        res.on("end", () => {
+          try {
+            const raw = JSON.parse(data);
 
-function extractCounts(items) {
-  return items.map((item) => {
-    const match = item.match(/\*\*x(\d+)\*\*/);
-    const stock = match ? match[1] : "0";
-    const name = item.replace(/\s*\*\*x\d+\*\*$/, "").trim();
-    return { name, stock };
+            // ---- NEW: Transform to prettified format ----
+            const dataObj = raw.data[0];
+
+            const filterAndMap = (obj) =>
+              Object.entries(obj)
+                .filter(([_, v]) => v !== "0")
+                .map(([name, stock]) => ({ name, stock }));
+
+            const pretty = {
+              updatedAt: Date.now(),
+              gear: filterAndMap(dataObj.gear),
+              seeds: filterAndMap(dataObj.seeds),
+              egg: (dataObj.eggs || []).map((e) => ({
+                name: e.name,
+                stock: e.quantity.toString(),
+              })),
+            };
+
+            resolve(pretty);
+          } catch (err) {
+            reject(new Error("Failed to parse JSON: " + err.message));
+          }
+        });
+      })
+      .on("error", reject);
   });
 }
 
@@ -124,39 +116,52 @@ function buildStockEmbed(stock) {
     .setTimestamp();
 }
 
-let lastStockData = {
-  seeds: [],
-  gear: [],
-  egg: [],
-};
+// Initialize as null instead of empty arrays to better track first run
+let lastStockData = null;
 
 async function updateStock() {
-  const mainStock = await fetchStockData(`/api/stock?cb=${Date.now()}`);
+  const mainStock = await fetchStockData(`/api/grow-a-garden/stock`);
   const freshStockData = {
     Data: {
       updatedAt: mainStock.updatedAt || Date.now(),
-      gear: extractCounts(mainStock.gear || []),
-      seeds: extractCounts(mainStock.seeds || []),
-      egg: extractCounts(mainStock.egg || []),
+      gear: mainStock.gear,
+      seeds: mainStock.seeds,
+      egg: mainStock.egg,
     },
   };
+
+  const eggs = freshStockData.Data.egg;
+
+  // Handle the Common Egg special case
+  if (
+    eggs.length === 1 &&
+    eggs[0].name === "Common Egg" &&
+    parseInt(eggs[0].stock) === 1
+  ) {
+    eggs[0].stock = "3";
+  }
 
   const embed = buildStockEmbed(freshStockData);
 
   const newlyAvailable = [];
-  for (const cat of ["seeds", "gear", "egg"]) {
-    for (const item of freshStockData.Data[cat]) {
-      const wasMissing = !lastStockData[cat].some((i) => i.name === item.name);
-      if (wasMissing) {
-        newlyAvailable.push({ category: cat, name: item.name });
+
+  // Only check for newly available items if we have previous data
+  if (lastStockData !== null) {
+    for (const cat of ["seeds", "gear", "egg"]) {
+      for (const item of freshStockData.Data[cat]) {
+        const wasMissing = !lastStockData[cat].some((i) => i.name === item.name);
+        if (wasMissing) {
+          newlyAvailable.push({ category: cat, name: item.name });
+        }
       }
     }
   }
 
+  // Update the tracking data
   lastStockData = {
-    seeds: freshStockData.Data.seeds,
-    gear: freshStockData.Data.gear,
-    egg: freshStockData.Data.egg,
+    seeds: [...freshStockData.Data.seeds],
+    gear: [...freshStockData.Data.gear],
+    egg: [...freshStockData.Data.egg],
   };
 
   const userIds = new Set();
@@ -178,6 +183,7 @@ async function updateStock() {
       }
     }
   }
+  
   return {
     embed,
     updatedAt: freshStockData.Data.updatedAt,
@@ -190,5 +196,3 @@ async function updateStock() {
 }
 
 module.exports = { updateStock };
-// originially taken from https://github.com/Just3itx/Grow-A-Garden-API
-// edited by jadebetty 6.22.25.
