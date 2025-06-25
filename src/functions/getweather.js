@@ -1,107 +1,123 @@
-// const https = require("https");
+const { EmbedBuilder } = require("@discordjs/builders");
+const https = require("https");
+const { logger } = require("console-wizard");
 
-// function createOptions(path) {
-//   return {
-//     method: "GET",
-//     hostname: "growagarden.gg",
-//     path: path,
-//     headers: {
-//       accept: "*/*",
-//       "accept-language": "en-US,en;q=0.9",
-//       "next-router-state-tree":
-//         "%5B%22%22%2C%7B%22children%22%3A%5B%22stocks%22%2C%7B%22children%22%3A%5B%22__PAGE__%22%2C%7B%7D%2C%22%2Fstocks%22%2C%22refresh%22%5D%7D%5D%7D%2Cnull%2C%22refetch%22%5D",
-//       priority: "u=1, i",
-//       referer: "https://growagarden.gg/weather",
-//       rsc: "1",
-//       "sec-fetch-dest": "empty",
-//       "sec-fetch-mode": "cors",
-//       "sec-fetch-site": "same-origin",
-//       "user-agent":
-//         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 OPR/119.0.0.0",
-//       "Content-Length": "0",
-//     },
-//   };
-// }
+function fetchWeatherData(url, retryCount = 3) {
+  return new Promise((resolve, reject) => {
+    https
+      .get(`${url}`, (res) => {
+        let data = "";
+        res.on("data", (chunk) => (data += chunk));
+        res.on("end", () => {
+          try {
+            let raw = JSON.parse(data);
 
-// function extractJSONFromText(text, key) {
-//   const keyPos = text.indexOf(`"${key}"`);
-//   if (keyPos === -1) return null;
+            if (raw.error && raw.retry_after_seconds && retryCount > 0) {
+              console.log(raw);
+              logger.warn(
+                `Rate limited. Retrying in ${raw.retry_after_seconds}s...`
+              );
+              setTimeout(() => {
+                fetchStockDataNEW(url, retryCount - 1)
+                  .then(resolve)
+                  .catch(reject);
+              }, raw.retry_after_seconds * 1000);
+              return;
+            }
 
-//   const colonPos = text.indexOf(":", keyPos);
-//   if (colonPos === -1) return null;
+            if (raw.error) {
+              logger.warn("Unhandled error:", raw.error);
+              const pretty = {
+                name: "Not found",
+                id: "not-found",
+                duration: 180,
+                startAt: 0,
+              };
+              return resolve(pretty);
+            }
 
-//   const startPos = text.indexOf("{", colonPos);
-//   if (startPos === -1) return null;
+            let pretty = raw.weather
+              .filter((w) => w.active === true)
+              .map((w) => ({
+                name: w.weather_name,
+                id: w.weather_id,
+                duration: w.duration,
+                startAt: w.start_duration_unix,
+              }));
 
-//   let bracketCount = 0;
-//   let endPos = startPos;
+            resolve(pretty);
+          } catch (err) {
+            logger.error(
+              `Failed to parsejson, will continue running ${err.message}`
+            );
+            const pretty = {
+              name: "Not found",
+              id: "not-found",
+              duration: 180,
+              startAt: 0,
+            };
+            return resolve(pretty);
+          }
+        });
+      })
+      .on("error", reject);
+  });
+}
 
-//   for (let i = startPos; i < text.length; i++) {
-//     if (text[i] === "{") bracketCount++;
-//     else if (text[i] === "}") bracketCount--;
+function getEmoji(name) {
+  const lower = name.toLowerCase();
+  if (lower.includes("rain")) return "🌧";
+  if (lower.includes("thunderstorm")) return "⛈";
+  if (lower.includes("disco")) return "🕺";
+  if (lower.includes("jandelstorm")) return "🐵🌧";
+  if (lower.includes("blackhole")) return "⚫";
+  if (lower.includes("djjhai")) return "🎉";
+  if (lower.includes("nightevent")) return "🌙";
+  if (lower.includes("meteorshower")) return "⭐🚿";
+  if (lower.includes("sungod")) return "☀🐒";
+  if (lower.includes("jandelfloat")) return "🐵";
+  if (lower.includes("chocolaterain")) return "🍫🌧";
+  if (lower.includes("volcano")) return "🌋";
+  if (lower.includes("alieninvasion")) return "👽";
+  if (lower.includes("spacetravel")) return "🚀";
+  if (lower.includes("windy")) return "🍃";
+  if (lower.includes("heatwave")) return "🥵";
+  if (lower.includes("tornado")) return "🌪";
+  return "❓";
+}
 
-//     if (bracketCount === 0) {
-//       endPos = i;
-//       break;
-//     }
-//   }
+function buildWeatherEmbed(weather) {
+  return new EmbedBuilder()
+    .setColor(0x89ff5b)
+    .setTitle(`${weather.name}`)
+    .setDescription(
+      `${getEmoji(weather.id)} There is a ${
+        weather.name
+      } right now! Join Grow A Garden for more mutation chances!`
+    )
+    .setTimestamp();
+}
 
-//   if (bracketCount !== 0) return null;
+async function updateWeather() {
+  const weather = await fetchWeatherData(
+    `https://api.joshlei.com/v2/growagarden/weather`
+  );
 
-//   return text.slice(startPos, endPos + 1);
-// }
+  if (!Array.isArray(weather) || weather.length === 0) return null;
 
-// function fetchStockData(path) {
-//   return new Promise((resolve, reject) => {
-//     const options = createOptions(path);
-//     const req = https.request(options, (res) => {
-//       let data = "";
+  console.log(weather);
 
-//       res.on("data", (chunk) => {
-//         data += chunk;
-//       });
+  const embeds = []
+  weather.forEach((weather) => {
+    embeds.push(buildWeatherEmbed(weather));
+  });
 
-//       res.on("end", () => {
-//         const jsonString = extractJSONFromText(data, "weatherDataSSR");
+  console.log(embeds);
 
-//         if (!jsonString) {
-//           return reject(new Error("weatherDataSSR not found"));
-//         }
+  return {
+    embeds,
+    weather,
+  };
+}
 
-//         try {
-//           const weatherDataSSR = JSON.parse(jsonString);
-//           resolve(weatherDataSSR);
-//         } catch (e) {
-//           reject(new Error("Failed to parse extracted JSON: " + e.message));
-//         }
-//       });
-//     });
-
-//     req.on("error", (e) => {
-//       reject(e);
-//     });
-
-//     req.end();
-//   });
-// }
-
-// // Example usage without a server:
-// async function updateWeather(client) {
-//   try {
-//     const path = "/weather?_rsc=2pcbz"; 
-//     const weatherData = await fetchStockData(path);
-//     console.log("Weather data:", weatherData);
-//     // You can store this data in a variable or process it as needed
-//   } catch (err) {
-//     console.error("Failed to fetch weather data:", err.message);
-//   }
-// }
-
-// // // Run immediately and then every 30 minutes
-// // updateWeather();
-
-
-// module.exports = { updateWeather }
-
-// originially taken from https://github.com/Just3itx/Grow-A-Garden-API
-// edited by jadebetty 6.22.25.
+module.exports = { updateWeather };

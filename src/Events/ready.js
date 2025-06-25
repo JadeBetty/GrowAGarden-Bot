@@ -5,6 +5,7 @@ const { QuickDB } = require("quick.db");
 const db = new QuickDB();
 const config = require("../../config.json");
 const { logger } = require("console-wizard");
+const { updateWeather } = require("../functions/getweather");
 
 module.exports = {
   event: "ready",
@@ -20,7 +21,6 @@ module.exports = {
       return new Promise((resolve) => setTimeout(resolve, ms));
     }
 
-
     async function waitUntilNextFiveMinuteMark() {
       const now = new Date();
       const mins = now.getMinutes();
@@ -32,7 +32,7 @@ module.exports = {
       let waitMs = diffMins * 60 * 1000 - secs * 1000 - ms;
 
       if (waitMs <= 0) {
-        waitMs = (5 * 60 * 1000) + waitMs; // Add 5 minutes
+        waitMs = 5 * 60 * 1000 + waitMs; // Add 5 minutes
       }
 
       logger.info(`Next 5-min mark in ${Math.round(waitMs / 1000)} seconds`);
@@ -83,14 +83,16 @@ module.exports = {
 
         // Skip the first check after startup since we just sent the initial embed
         if (isFirstCheck) {
-          logger.info("[Stock] Skipping first check after startup - using current data as baseline");
+          logger.info(
+            "[Stock] Skipping first check after startup - using current data as baseline"
+          );
           isFirstCheck = false;
           continue;
         }
 
         // Wait an additional 10 seconds after the 5-minute mark to ensure stock has updated
-        logger.info("[Stock] Waiting 10 seconds for stock server to update...");
-        await sleep(10000);
+        logger.info("[Stock] Waiting 5 seconds for stock server to update...");
+        await sleep(1 * 1000);
 
         let freshEmbed = null;
         let newRawData = null;
@@ -110,7 +112,7 @@ module.exports = {
           });
 
           if (newDataString !== lastDataString) {
-            lastUpdatedAt = stockUpdate.updatedAt;
+            lastUpdatedAt = stockUpdate.updatedAt * 1000;
             lastDataString = newDataString;
             freshEmbed = stockUpdate.embed;
             newRawData = stockUpdate.rawData;
@@ -118,7 +120,7 @@ module.exports = {
             changed = true;
             logger.success(
               `[Stock] New stock detected. ${new Date(
-                stockUpdate.updatedAt
+                stockUpdate.updatedAt * 1000
               ).toLocaleTimeString()}`
             );
           } else {
@@ -241,6 +243,21 @@ module.exports = {
         item.name.toLowerCase().includes(keyword.toLowerCase())
       );
     }
+
+    async function startWeatherLoop() {
+      const weather = await updateWeather();
+      if (weather === null) return;
+      await stockChannel.send({ embeds: weather.embeds });
+      logger.success(`[Weather] Sent initial weather embed.`);
+      setInterval(async () => {
+        const weather = await updateWeather();
+        if (weather === null) return;
+        await stockChannel.send({ embeds: weather.embeds });
+        logger.success(`[Weather] Sent new weather embed.`);
+      }, 90 * 1000);
+    }
+
+    startWeatherLoop();
     startStockLoop();
   },
 };

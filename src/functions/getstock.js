@@ -2,11 +2,12 @@ const { EmbedBuilder, time, TimestampStyles } = require("@discordjs/builders");
 const https = require("https");
 const { QuickDB } = require("quick.db");
 const db = new QuickDB();
+const { logger } = require("console-wizard");
 
-function fetchStockData(path) {
+function fetchStockData(url) {
   return new Promise((resolve, reject) => {
     https
-      .get(`https://www.gamersberg.com/${path}`, (res) => {
+      .get(`${url}`, (res) => {
         let data = "";
         res.on("data", (chunk) => (data += chunk));
         res.on("end", () => {
@@ -14,26 +15,118 @@ function fetchStockData(path) {
             const raw = JSON.parse(data);
 
             // ---- NEW: Transform to prettified format ----
-            const dataObj = raw.data[0];
+            const dataObj = (raw.data && raw.data[0]) || null;
 
             const filterAndMap = (obj) =>
               Object.entries(obj)
                 .filter(([_, v]) => v !== "0")
                 .map(([name, stock]) => ({ name, stock }));
 
-            const pretty = {
+            if (dataObj.length === 0) {
+              const pretty = null;
+              resolve(pretty);
+            } else {
+              const pretty = {
+                updatedAt: Date.now() / 1000,
+                gear: filterAndMap(dataObj.gear),
+                seeds: filterAndMap(dataObj.seeds),
+                egg: (dataObj.eggs || []).map((e) => ({
+                  name: e.name,
+                  stock: e.quantity.toString(),
+                })),
+              };
+              resolve(pretty);
+            }
+          } catch (err) {
+            console.log(err);
+            logger.error(
+              `failed to parsejson, will continue running ${err.message}`
+            );
+          }
+        });
+      })
+      .on("error", reject);
+  });
+}
+
+function fetchStockDataNEW(url, retryCount = 3) {
+  return new Promise((resolve, reject) => {
+    https
+      .get(`${url}`, (res) => {
+        let data = "";
+        res.on("data", (chunk) => (data += chunk));
+        res.on("end", () => {
+          try {
+            let raw = JSON.parse(data);
+
+            if (raw.error && raw.retry_after_seconds && retryCount > 0) {
+              console.log(raw);
+              logger.warn(
+                `Rate limited. Retrying in ${raw.retry_after_seconds}s...`
+              );
+              setTimeout(() => {
+                fetchStockDataNEW(url, retryCount - 1)
+                  .then(resolve)
+                  .catch(reject);
+              }, raw.retry_after_seconds * 1000);
+              return;
+            }
+
+            if (raw.error) {
+              logger.warn("Unhandled error:", raw.error);
+              const pretty = {
               updatedAt: Date.now(),
-              gear: filterAndMap(dataObj.gear),
-              seeds: filterAndMap(dataObj.seeds),
-              egg: (dataObj.eggs || []).map((e) => ({
-                name: e.name,
-                stock: e.quantity.toString(),
-              })),
+              gear: [],
+              seeds: [],
+              egg: [],
+            };
+              return resolve(pretty);
+            }
+
+
+            // ---- NEW: Transform to prettified format ----
+            // const dataObj = (raw.data && raw.data[0]) || null;
+
+            const filterAndMap = (obj) =>
+              obj
+                .filter((item) => item.quantity !== 0) // Ensure quantity is not "0"
+                .map(({ display_name, quantity }) => ({
+                  name: display_name, // Use actual display_name here
+                  stock: quantity.toString(),
+                }));
+
+
+            const pretty = {
+              updatedAt: raw.seed_stock[0].start_date_unix,
+              gear: filterAndMap(raw.gear_stock),
+              seeds: filterAndMap(raw.seed_stock),
+              egg: filterAndMap(raw.egg_stock),
             };
 
+
             resolve(pretty);
+
+
+            // if (dataObj.length === 0) {
+            //   const pretty = null
+            //   resolve(pretty);
+            // } else {
+            //   const pretty = {
+            //     updatedAt: Date.now(),
+            //     gear: filterAndMap(dataObj.gear),
+            //     seeds: filterAndMap(dataObj.seeds),
+            //     egg: (dataObj.eggs || []).map((e) => ({
+            //       name: e.name,
+            //       stock: e.quantity.toString(),
+            //     })),
+            //   };
+            //   resolve(pretty);
+            // }
           } catch (err) {
-            reject(new Error("Failed to parse JSON: " + err.message));
+            console.log(err);
+            logger.error(
+              `failed to parsejson, will continue running ${err.message}`
+            );
           }
         });
       })
@@ -94,7 +187,7 @@ function buildStockEmbed(stock) {
       .map((item) => `**x${item.stock}** 🥚 ${item.name}`)
       .join("\n") || "None";
 
-  const updatedAtDate = new Date(stock.Data.updatedAt);
+  const updatedAtDate = new Date(stock.Data.updatedAt * 1000);
   const msPer5Min = 1000 * 60 * 5;
   const roundedDate = new Date(
     Math.floor(updatedAtDate.getTime() / msPer5Min) * msPer5Min
@@ -120,10 +213,18 @@ function buildStockEmbed(stock) {
 let lastStockData = null;
 
 async function updateStock() {
-  const mainStock = await fetchStockData(`/api/grow-a-garden/stock`);
+  // const mainStock = await fetchStockData(`https://www.gamersberg.com/api/grow-a-garden/stock`);
+
+  let mainStock = null;
+
+  if (mainStock == null)
+    mainStock = await fetchStockDataNEW(
+      `https://api.joshlei.com/v2/growagarden/stock`
+    );
+
   const freshStockData = {
     Data: {
-      updatedAt: mainStock.updatedAt || Date.now(),
+      updatedAt: mainStock.updatedAt,
       gear: mainStock.gear,
       seeds: mainStock.seeds,
       egg: mainStock.egg,
@@ -149,7 +250,9 @@ async function updateStock() {
   if (lastStockData !== null) {
     for (const cat of ["seeds", "gear", "egg"]) {
       for (const item of freshStockData.Data[cat]) {
-        const wasMissing = !lastStockData[cat].some((i) => i.name === item.name);
+        const wasMissing = !lastStockData[cat].some(
+          (i) => i.name === item.name
+        );
         if (wasMissing) {
           newlyAvailable.push({ category: cat, name: item.name });
         }
@@ -183,7 +286,7 @@ async function updateStock() {
       }
     }
   }
-  
+
   return {
     embed,
     updatedAt: freshStockData.Data.updatedAt,
