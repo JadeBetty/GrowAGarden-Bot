@@ -30,7 +30,7 @@ function fetchWeatherData(url, retryCount = 3) {
               const pretty = {
                 name: "Not found",
                 id: "not-found",
-                duration: 180,
+                duration: 60,
                 startAt: 0,
               };
               return resolve(pretty);
@@ -53,7 +53,7 @@ function fetchWeatherData(url, retryCount = 3) {
             const pretty = {
               name: "Not found",
               id: "not-found",
-              duration: 180,
+              duration: 60,
               startAt: 0,
             };
             return resolve(pretty);

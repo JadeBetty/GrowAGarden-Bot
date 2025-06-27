@@ -38,7 +38,6 @@ module.exports = {
             name: client.user.tag,
             iconURL: client.user.displayAvatarURL(),
           })
-          .setFooter("Made by JadeBetty.")
           .setColor("#a8f1b0")
           .setTimestamp(),
       ],

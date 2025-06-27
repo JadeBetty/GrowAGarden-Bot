@@ -1,17 +1,19 @@
 const Discord = require("discord.js");
 const { updateStock } = require("../functions/getstock");
-// const { updateWeather } = require("../functions/getweather"); isn't working yet.
+const { updateWeather } = require("../functions/getweather");
 const { QuickDB } = require("quick.db");
 const db = new QuickDB();
 const config = require("../../config.json");
 const { logger } = require("console-wizard");
-const { updateWeather } = require("../functions/getweather");
+
+const recentlyPinged = new Map();
+
+// In-memory cache for guild channels
+const guildChannelsCache = new Map();
 
 module.exports = {
   event: "ready",
   async run(client) {
-    const stockChannel = await client.channels.fetch("1381637521728868474");
-    let lastUpdatedAt = null;
     logger.success(`Logged in as ${client.user.tag}`);
     client.user.setActivity("Grow A Garden", {
       type: Discord.ActivityType.Playing,
@@ -19,6 +21,215 @@ module.exports = {
 
     function sleep(ms) {
       return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    // Load all guild channel info into cache
+    async function loadGuildChannelsCache() {
+      const allGuilds = await db.all();
+      guildChannelsCache.clear();
+      for (const entry of allGuilds) {
+        if (!entry.id.startsWith("guild_")) continue;
+        const guildId = entry.id.split("_")[1];
+        const guildData = entry.value || {};
+        const stockChannelId = guildData.channels?.stock || null;
+        const weatherChannelId = guildData.channels?.weather || null;
+
+        guildChannelsCache.set(guildId, { stockChannelId, weatherChannelId });
+      }
+      logger.info(
+        `Loaded guild channels cache: ${guildChannelsCache.size} guilds.`
+      );
+    }
+
+    // Call this to update cache for a single guild when needed
+    async function updateGuildCache(guildId) {
+      const guildData = await db.get(`guild_${guildId}`);
+      const stockChannelId = guildData?.channels?.stock || null;
+      const weatherChannelId = guildData?.channels?.weather || null;
+      guildChannelsCache.set(guildId, { stockChannelId, weatherChannelId });
+      logger.info(`Updated cache for guild ${guildId}`);
+    }
+
+    // Safe send helper
+    async function sendToChannel(channelId, content, embeds) {
+      if (!channelId) return false;
+      try {
+        const channel = await client.channels.fetch(channelId);
+        if (!channel || !channel.isTextBased()) return false;
+        await channel.send({
+          content,
+          embeds: embeds
+            ? Array.isArray(embeds)
+              ? embeds
+              : [embeds]
+            : undefined,
+        });
+
+        return true;
+      } catch (error) {
+        logger.warn(
+          `Failed to send message to channel ${channelId}: ${error.message}`
+        );
+        return false;
+      }
+    }
+
+    // Your other existing helper functions...
+
+    // STOCK LOOP
+    async function startStockLoop() {
+      await loadGuildChannelsCache(); // load cache at start
+
+      let {
+        embed: firstEmbed,
+        updatedAt: firstUpdatedAt,
+        rawData,
+      } = await updateStock();
+
+      let lastUpdatedAt = firstUpdatedAt;
+
+      // Prepare ping content once
+      const pingRoles = await collectRolesToPing(rawData);
+      const pingContent = pingRoles.length
+        ? pingRoles.map((id) => `<@&${id}>`).join(" ")
+        : null;
+
+      // Send to all guild stock channels using cache
+      for (const [
+        guildId,
+        { stockChannelId },
+      ] of guildChannelsCache.entries()) {
+        if (!stockChannelId) {
+          logger.warn(`[Stock] No stock channel set for guild ${guildId}`);
+          continue;
+        }
+        await sendToChannel(stockChannelId, pingContent, firstEmbed);
+      }
+
+      logger.success(
+        `[Stock] Sent initial embeds to all guild stock channels.`
+      );
+
+      await handleUserDMs(rawData);
+
+      let isFirstCheck = true;
+
+      while (true) {
+        await waitUntilNextFiveMinuteMark();
+
+        if (isFirstCheck) {
+          logger.info(
+            "[Stock] Skipping first check after startup - baseline data."
+          );
+          isFirstCheck = false;
+          continue;
+        }
+
+        logger.info("[Stock] Waiting 5 seconds for stock update...");
+        await sleep(5 * 1000);
+
+        let freshEmbed = null;
+        let changed = false;
+        let lastDataString = JSON.stringify({
+          seeds: rawData.Data.seeds,
+          gear: rawData.Data.gear,
+          egg: rawData.Data.egg,
+        });
+        const startTime = Date.now(); // start time
+
+        while (!changed) {
+          const stockUpdate = await updateStock();
+          const newDataString = JSON.stringify({
+            seeds: stockUpdate.rawData.Data.seeds,
+            gear: stockUpdate.rawData.Data.gear,
+            egg: stockUpdate.rawData.Data.egg,
+          });
+
+          if (newDataString !== lastDataString) {
+            lastUpdatedAt = stockUpdate.updatedAt * 1000;
+            lastDataString = newDataString;
+            freshEmbed = stockUpdate.embed;
+            rawData = stockUpdate.rawData;
+            changed = true;
+            logger.success(
+              `[Stock] New stock detected at ${new Date(
+                lastUpdatedAt
+              ).toLocaleTimeString()}`
+            );
+          } else {
+            logger.error(`[Stock] No update yet, retrying in 5s.`);
+          }
+
+          // Check if 60 seconds passed
+          if (Date.now() - startTime > 60 * 1000) {
+            logger.warn(
+              `[Stock] No new update after 1 minute. Skipping this cycle.`
+            );
+            break;
+          }
+
+          await sleep(5 * 1000);
+        }
+
+        if (freshEmbed) {
+          const pingRoles = await collectRolesToPing(rawData);
+          const pingContent = pingRoles.length
+            ? pingRoles.map((id) => `<@&${id}>`).join(" ")
+            : null;
+
+          // Use cached channels for sending updates
+          for (const [
+            guildId,
+            { stockChannelId },
+          ] of guildChannelsCache.entries()) {
+            if (!stockChannelId) {
+              logger.warn(`[Stock] No stock channel set for guild ${guildId}`);
+              continue;
+            }
+            await sendToChannel(stockChannelId, pingContent, freshEmbed);
+          }
+
+          logger.success(
+            `[Stock] Sent new embed${
+              pingRoles.length === 0
+                ? "s without any role pings."
+                : ` with role pings: ${pingRoles}`
+            }`
+          );
+          await handleUserDMs(rawData);
+        }
+      }
+    }
+
+    // WEATHER LOOP
+    async function startWeatherLoop() {
+      await loadGuildChannelsCache(); // load cache at start
+
+      async function sendWeather() {
+        const weather = await updateWeather();
+        if (weather === null) return;
+
+        for (const [
+          guildId,
+          { weatherChannelId },
+        ] of guildChannelsCache.entries()) {
+          if (!weatherChannelId) {
+            logger.warn(
+              `[Weather] No weather channel set for guild ${guildId}`
+            );
+            continue;
+          }
+          await sendToChannel(weatherChannelId, null, weather.embeds);
+        }
+
+        logger.success(
+          `[Weather] Sent weather embeds to all guild weather channels.`
+        );
+
+        setTimeout(sendWeather, weather.duration * 1000);
+      }
+
+      await sendWeather();
     }
 
     async function waitUntilNextFiveMinuteMark() {
@@ -42,114 +253,6 @@ module.exports = {
     function isAtThirtyMinuteMark() {
       const mins = new Date().getMinutes();
       return mins < 5 || (mins >= 30 && mins < 35);
-    }
-
-    async function startStockLoop() {
-      let {
-        embed: firstEmbed,
-        updatedAt: firstUpdatedAt,
-        rawData,
-      } = await updateStock();
-      lastUpdatedAt = firstUpdatedAt;
-      const pingRoles = await collectRolesToPing(rawData);
-      const pingContent = pingRoles.length
-        ? pingRoles.map((id) => `<@&${id}>`).join(" ")
-        : null;
-
-      await stockChannel.send({
-        content: pingContent,
-        embeds: [firstEmbed],
-      });
-      logger.success(
-        `[Stock] Sent initial embed${
-          pingRoles === null
-            ? "s without any role pings."
-            : ` with role pings: ${pingRoles}`
-        }`
-      );
-      logger.info(
-        `Last updated: ${new Date(rawData.Data.updatedAt).toLocaleTimeString()}`
-      );
-      logger.table(rawData.Data.gear);
-      logger.table(rawData.Data.seeds);
-      logger.table(rawData.Data.egg);
-      await handleUserDMs(rawData);
-
-      // Add flag to skip first check after startup
-      let isFirstCheck = true;
-
-      while (true) {
-        await waitUntilNextFiveMinuteMark();
-
-        // Skip the first check after startup since we just sent the initial embed
-        if (isFirstCheck) {
-          logger.info(
-            "[Stock] Skipping first check after startup - using current data as baseline"
-          );
-          isFirstCheck = false;
-          continue;
-        }
-
-        // Wait an additional 10 seconds after the 5-minute mark to ensure stock has updated
-        logger.info("[Stock] Waiting 5 seconds for stock server to update...");
-        await sleep(1 * 1000);
-
-        let freshEmbed = null;
-        let newRawData = null;
-        let changed = false;
-        let lastDataString = JSON.stringify({
-          seeds: rawData.Data.seeds,
-          gear: rawData.Data.gear,
-          egg: rawData.Data.egg,
-        });
-
-        while (!changed) {
-          const stockUpdate = await updateStock();
-          const newDataString = JSON.stringify({
-            seeds: stockUpdate.rawData.Data.seeds,
-            gear: stockUpdate.rawData.Data.gear,
-            egg: stockUpdate.rawData.Data.egg,
-          });
-
-          if (newDataString !== lastDataString) {
-            lastUpdatedAt = stockUpdate.updatedAt * 1000;
-            lastDataString = newDataString;
-            freshEmbed = stockUpdate.embed;
-            newRawData = stockUpdate.rawData;
-            rawData = stockUpdate.rawData;
-            changed = true;
-            logger.success(
-              `[Stock] New stock detected. ${new Date(
-                stockUpdate.updatedAt * 1000
-              ).toLocaleTimeString()}`
-            );
-          } else {
-            logger.error(`[Stock] Hasn't updated, retrying every 5s.`);
-          }
-          await sleep(5 * 1000);
-        }
-
-        if (freshEmbed) {
-          const pingRoles = await collectRolesToPing(newRawData);
-          const pingContent = pingRoles.length
-            ? pingRoles.map((id) => `<@&${id}>`).join(" ")
-            : null;
-
-          await stockChannel.send({
-            content: pingContent,
-            embeds: [freshEmbed],
-          });
-
-          logger.success(
-            `[Stock] Sent new embed${
-              pingRoles.length === 0
-                ? "s without any role pings."
-                : ` with role pings: ${pingRoles}`
-            }`
-          );
-          await handleUserDMs(newRawData);
-        }
-      }
     }
 
     async function collectRolesToPing(stockData) {
@@ -244,20 +347,16 @@ module.exports = {
       );
     }
 
-    async function startWeatherLoop() {
-      const weather = await updateWeather();
-      if (weather === null) return;
-      await stockChannel.send({ embeds: weather.embeds });
-      logger.success(`[Weather] Sent initial weather embed.`);
-      setInterval(async () => {
-        const weather = await updateWeather();
-        if (weather === null) return;
-        await stockChannel.send({ embeds: weather.embeds });
-        logger.success(`[Weather] Sent new weather embed.`);
-      }, 90 * 1000);
-    }
+    // Utility functions: collectRolesToPing, handleUserDMs, waitUntilNextFiveMinuteMark, etc.
+    // (Use your existing implementations here)
 
+    // Start loops
     startWeatherLoop();
     startStockLoop();
+
+    setInterval(async () => {
+      logger.info("Refreshing guild channels cache...");
+      await loadGuildChannelsCache();
+    }, 10 * 60 * 1000); // 10 minutes
   },
 };
