@@ -13,7 +13,6 @@ function fetchWeatherData(url, retryCount = 3) {
             let raw = JSON.parse(data);
 
             if (raw.error && raw.retry_after_seconds && retryCount > 0) {
-              console.log(raw);
               logger.warn(
                 `Rate limited. Retrying in ${raw.retry_after_seconds}s...`
               );
@@ -105,14 +104,10 @@ async function updateWeather() {
 
   if (!Array.isArray(weather) || weather.length === 0) return null;
 
-  console.log(weather);
-
   const embeds = []
   weather.forEach((weather) => {
     embeds.push(buildWeatherEmbed(weather));
   });
-
-  console.log(embeds);
 
   return {
     embeds,

@@ -75,14 +75,13 @@ function fetchStockDataNEW(url, retryCount = 3) {
             if (raw.error) {
               logger.warn("Unhandled error:", raw.error);
               const pretty = {
-              updatedAt: Date.now(),
-              gear: [],
-              seeds: [],
-              egg: [],
-            };
+                updatedAt: Date.now(),
+                gear: [],
+                seeds: [],
+                egg: [],
+              };
               return resolve(pretty);
             }
-
 
             // ---- NEW: Transform to prettified format ----
             // const dataObj = (raw.data && raw.data[0]) || null;
@@ -95,7 +94,6 @@ function fetchStockDataNEW(url, retryCount = 3) {
                   stock: quantity.toString(),
                 }));
 
-
             const pretty = {
               updatedAt: raw.seed_stock[0].start_date_unix,
               gear: filterAndMap(raw.gear_stock),
@@ -103,9 +101,7 @@ function fetchStockDataNEW(url, retryCount = 3) {
               egg: filterAndMap(raw.egg_stock),
             };
 
-
             resolve(pretty);
-
 
             // if (dataObj.length === 0) {
             //   const pretty = null
@@ -127,6 +123,14 @@ function fetchStockDataNEW(url, retryCount = 3) {
             logger.error(
               `failed to parsejson, will continue running ${err.message}`
             );
+
+            const fallback = {
+              updatedAt: Date.now(),
+              gear: [],
+              seeds: [],
+              egg: [],
+            };
+            resolve(fallback);
           }
         });
       })

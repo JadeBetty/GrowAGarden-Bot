@@ -125,8 +125,8 @@ module.exports = {
           continue;
         }
 
-        logger.info("[Stock] Waiting 5 seconds for stock update...");
-        await sleep(5 * 1000);
+        // logger.info("[Stock] Waiting 1 second for stock update...");
+        // await sleep(1 * 1000);
 
         let freshEmbed = null;
         let changed = false;
@@ -157,7 +157,8 @@ module.exports = {
               ).toLocaleTimeString()}`
             );
           } else {
-            logger.error(`[Stock] No update yet, retrying in 5s.`);
+            logger.error(`[Stock] No update yet, retrying in 1s.`);
+            await sleep(1 * 1000);
           }
 
           // Check if 60 seconds passed
@@ -168,7 +169,7 @@ module.exports = {
             break;
           }
 
-          await sleep(5 * 1000);
+          // await sleep(1 * 1000);
         }
 
         if (freshEmbed) {
@@ -226,7 +227,7 @@ module.exports = {
           `[Weather] Sent weather embeds to all guild weather channels.`
         );
 
-        setTimeout(sendWeather, weather.duration * 1000);
+        setTimeout(sendWeather, weather.weather[0].duration * 1000);
       }
 
       await sendWeather();
@@ -261,11 +262,21 @@ module.exports = {
 
       for (const entry of allGuildKeys) {
         const guildData = entry.value;
+
         for (const category of ["seed", "gear", "egg"]) {
           const categoryItems = guildData[category] || {};
+
           for (const itemName in categoryItems) {
             const hasItem = checkForItem(stockData, itemName);
+
             if (hasItem) {
+              if (category === "egg" && !isAtThirtyMinuteMark()) {
+                logger.warn(
+                  `[Alert] Egg ${itemName} in stock, but skipping **ping** after 5 mins of the half-hour, hour.`
+                );
+                continue;
+              }
+
               const roleId = categoryItems[itemName].role;
               if (roleId) {
                 roleSet.add(roleId);
@@ -346,11 +357,6 @@ module.exports = {
         item.name.toLowerCase().includes(keyword.toLowerCase())
       );
     }
-
-    // Utility functions: collectRolesToPing, handleUserDMs, waitUntilNextFiveMinuteMark, etc.
-    // (Use your existing implementations here)
-
-    // Start loops
     startWeatherLoop();
     startStockLoop();
 
