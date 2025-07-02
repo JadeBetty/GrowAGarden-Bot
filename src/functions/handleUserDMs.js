@@ -2,6 +2,7 @@ const { QuickDB } = require("quick.db");
 const db = new QuickDB();
 const { checkForItem } = require("./helpers");
 const config = require("../../config.json");
+const { isAtThirtyMinuteMark } = require("./helpers")
 
 async function handleUserDMs(stockData, client) {
   const allGuildKeys = await db.all();
