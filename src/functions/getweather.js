@@ -14,10 +14,10 @@ function fetchWeatherData(url, retryCount = 3) {
 
             if (raw.error && raw.retry_after_seconds && retryCount > 0) {
               logger.warn(
-                `Rate limited. Retrying in ${raw.retry_after_seconds}s...`
+                `[Error] Rate limited, retrying in ${raw.retry_after_seconds}s...`
               );
               setTimeout(() => {
-                fetchStockDataNEW(url, retryCount - 1)
+                fetchStockData(url, retryCount - 1)
                   .then(resolve)
                   .catch(reject);
               }, raw.retry_after_seconds * 1000);
@@ -25,7 +25,7 @@ function fetchWeatherData(url, retryCount = 3) {
             }
 
             if (raw.error) {
-              logger.warn("Unhandled error:", raw.error);
+              logger.warn("[Error] Unhandled error:", raw.error);
               const pretty = {
                 name: "Not found",
                 id: "not-found",
@@ -47,7 +47,7 @@ function fetchWeatherData(url, retryCount = 3) {
             resolve(pretty);
           } catch (err) {
             logger.error(
-              `Failed to parsejson, will continue running ${err.message}`
+              `[Weather] Failed to fetch weather data. Error msg: ${err.message}`
             );
             const pretty = {
               name: "Not found",
@@ -92,7 +92,7 @@ function buildWeatherEmbed(weather) {
     .setDescription(
       `${getEmoji(weather.id)} There is a ${
         weather.name
-      } right now! Join Grow A Garden for more mutation chances!`
+      } right now!`
     )
     .setTimestamp();
 }
@@ -102,9 +102,20 @@ async function updateWeather() {
     `https://api.joshlei.com/v2/growagarden/weather`
   );
 
-  if (!Array.isArray(weather) || weather.length === 0) return null;
+  if (!Array.isArray(weather) || weather.length === 0)
+    return {
+      embeds: [],
+      weather: [
+        {
+          name: "Not found",
+          id: "not-found",
+          duration: 60,
+          startAt: 0,
+        },
+      ],
+    };
 
-  const embeds = []
+  const embeds = [];
   weather.forEach((weather) => {
     embeds.push(buildWeatherEmbed(weather));
   });

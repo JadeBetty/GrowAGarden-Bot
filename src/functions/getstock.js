@@ -4,7 +4,7 @@ const { QuickDB } = require("quick.db");
 const db = new QuickDB();
 const { logger } = require("console-wizard");
 
-function fetchStockData(url) {
+function fetchStockDataOLD(url) {
   return new Promise((resolve, reject) => {
     https
       .get(`${url}`, (res) => {
@@ -13,8 +13,6 @@ function fetchStockData(url) {
         res.on("end", () => {
           try {
             const raw = JSON.parse(data);
-
-            // ---- NEW: Transform to prettified format ----
             const dataObj = (raw.data && raw.data[0]) || null;
 
             const filterAndMap = (obj) =>
@@ -40,7 +38,7 @@ function fetchStockData(url) {
           } catch (err) {
             console.log(err);
             logger.error(
-              `failed to parsejson, will continue running ${err.message}`
+              `[Stock] Failed to fetch data. Error: ${err.message}`
             );
           }
         });
@@ -49,7 +47,7 @@ function fetchStockData(url) {
   });
 }
 
-function fetchStockDataNEW(url, retryCount = 3) {
+function fetchStockData(url, retryCount = 3) {
   return new Promise((resolve, reject) => {
     https
       .get(`${url}`, (res) => {
@@ -65,7 +63,7 @@ function fetchStockDataNEW(url, retryCount = 3) {
                 `Rate limited. Retrying in ${raw.retry_after_seconds}s...`
               );
               setTimeout(() => {
-                fetchStockDataNEW(url, retryCount - 1)
+                fetchStockData(url, retryCount - 1)
                   .then(resolve)
                   .catch(reject);
               }, raw.retry_after_seconds * 1000);
@@ -79,12 +77,10 @@ function fetchStockDataNEW(url, retryCount = 3) {
                 gear: [],
                 seeds: [],
                 egg: [],
+                api: false
               };
               return resolve(pretty);
             }
-
-            // ---- NEW: Transform to prettified format ----
-            // const dataObj = (raw.data && raw.data[0]) || null;
 
             const filterAndMap = (obj) =>
               obj
@@ -99,29 +95,14 @@ function fetchStockDataNEW(url, retryCount = 3) {
               gear: filterAndMap(raw.gear_stock),
               seeds: filterAndMap(raw.seed_stock),
               egg: filterAndMap(raw.egg_stock),
+              api: true
             };
 
             resolve(pretty);
-
-            // if (dataObj.length === 0) {
-            //   const pretty = null
-            //   resolve(pretty);
-            // } else {
-            //   const pretty = {
-            //     updatedAt: Date.now(),
-            //     gear: filterAndMap(dataObj.gear),
-            //     seeds: filterAndMap(dataObj.seeds),
-            //     egg: (dataObj.eggs || []).map((e) => ({
-            //       name: e.name,
-            //       stock: e.quantity.toString(),
-            //     })),
-            //   };
-            //   resolve(pretty);
-            // }
           } catch (err) {
             console.log(err);
             logger.error(
-              `failed to parsejson, will continue running ${err.message}`
+              `[Error] Failed to fetch data. Error message: ${err.message}`
             );
 
             const fallback = {
@@ -129,6 +110,7 @@ function fetchStockDataNEW(url, retryCount = 3) {
               gear: [],
               seeds: [],
               egg: [],
+              api: false
             };
             resolve(fallback);
           }
@@ -149,6 +131,7 @@ function getEmoji(name) {
   if (lower.includes("daffodil")) return "🌼";
   if (lower.includes("watermelon")) return "🍉";
   if (lower.includes("pumpkin")) return "🎃";
+  if (lower.includes("green apple")) return "🍏";
   if (lower.includes("apple")) return "🍎";
   if (lower.includes("spray")) return "🧴";
   if (lower.includes("bamboo")) return "🎍";
@@ -158,8 +141,6 @@ function getEmoji(name) {
   if (lower.includes("grape")) return "🍇";
   if (lower.includes("mushroom")) return "🍄";
   if (lower.includes("pepper")) return "🌶";
-  if (lower.includes("cacao")) return "❓";
-  if (lower.includes("beanstalk")) return "❓";
   if (lower.includes("ember")) return "💐";
   if (lower.includes("sugar")) return "🍏";
   if (lower.includes("trowel")) return "❓";
@@ -172,6 +153,10 @@ function getEmoji(name) {
   if (lower.includes("banana")) return "🍌";
   if (lower.includes("cauliflower")) return "🥦";
   if (lower.includes("loquat")) return "🍊";
+  if (lower.includes("magnifying glass")) return "🔍"
+  if (lower.includes("kiwi")) return "🥝";
+  if (lower.includes("pear")) return "🍐"
+  if (lower.includes("bell pepper")) return ":bell_pepper:";
   return "❓";
 }
 
@@ -200,31 +185,27 @@ function buildStockEmbed(stock) {
   const formattedTime = time(updatedAtSeconds, TimestampStyles.ShortTime);
 
   return new EmbedBuilder()
-    .setColor(0x89ff5b)
+    .setColor(0x7BE551)
     .setTitle(`Grow a Garden Stock - ${formattedTime}`)
-    .setDescription("\u200B")
     .addFields(
-      { name: "🌱 Seeds Stock", value: seeds, inline: true },
-      { name: "⚙️ Gear Stock", value: gear, inline: true },
-      { name: "🥚 Egg Stock", value: egg, inline: true }
+      { name: "  🌱 Seed Stock", value: seeds, inline: true },
+      { name: "  ⚙️ Gear Stock", value: gear, inline: true },
+      { name: "  🥚 Egg Stock", value: egg, inline: true }
     )
-    .setThumbnail("https://media2.giphy.com/media/afnFDEL2XsmC6ViFvv/giphy.gif")
-    .setImage("https://i.imgur.com/Q8jhixr.png")
+    .setThumbnail("https://tr.rbxcdn.com/180DAY-1db1ca86a77e30e87e2ffa3e38b8aece/256/256/Image/Webp/noFilter")
+    .setFooter({ text: "Grow A Garden", iconURL: "https://tr.rbxcdn.com/180DAY-1db1ca86a77e30e87e2ffa3e38b8aece/256/256/Image/Webp/noFilter"})
     .setTimestamp();
 }
 
-// Initialize as null instead of empty arrays to better track first run
+
 let lastStockData = null;
 
 async function updateStock() {
-  // const mainStock = await fetchStockData(`https://www.gamersberg.com/api/grow-a-garden/stock`);
-
-  let mainStock = null;
-
-  if (mainStock == null)
-    mainStock = await fetchStockDataNEW(
+  let mainStock = await fetchStockData(
       `https://api.joshlei.com/v2/growagarden/stock`
     );
+
+  if (mainStock.api === false) mainStock = await fetchStockDataOLD(`https://www.gamersberg.com/api/grow-a-garden/stock`);
 
   const freshStockData = {
     Data: {
@@ -237,7 +218,6 @@ async function updateStock() {
 
   const eggs = freshStockData.Data.egg;
 
-  // Handle the Common Egg special case
   if (
     eggs.length === 1 &&
     eggs[0].name === "Common Egg" &&
@@ -250,7 +230,6 @@ async function updateStock() {
 
   const newlyAvailable = [];
 
-  // Only check for newly available items if we have previous data
   if (lastStockData !== null) {
     for (const cat of ["seeds", "gear", "egg"]) {
       for (const item of freshStockData.Data[cat]) {
@@ -264,7 +243,6 @@ async function updateStock() {
     }
   }
 
-  // Update the tracking data
   lastStockData = {
     seeds: [...freshStockData.Data.seeds],
     gear: [...freshStockData.Data.gear],

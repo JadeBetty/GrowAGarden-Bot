@@ -8,6 +8,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName("removeuser")
     .setDescription("Remove yourself from alerts for a specific item.")
+    .setContexts(0)
     .addStringOption((option) =>
       option
         .setName("item")
@@ -41,7 +42,9 @@ module.exports = {
       });
     }
 
-    const userIndex = guildData[category][item].users.indexOf(interaction.user.id);
+    const userIndex = guildData[category][item].users.indexOf(
+      interaction.user.id
+    );
     if (userIndex === -1) {
       return interaction.reply({
         content: `❌ You are not subscribed to alerts for **${input}**`,

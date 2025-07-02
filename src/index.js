@@ -37,10 +37,10 @@ fs.readdir("./src/Events", (err, files) => {
 
   for (let i = 0; i < events.length; i++) {
     const event = events[i];
-    logger.info(`Registering ${event.event}`);
+    logger.info(`[Info] Registering ${event.event}`);
     if (!event?.event || !event?.run) {
       logger.error(
-        `${event?.event ?? "Unknown"} is missing an event name or run.`
+        `[Error] ${event?.event ?? "Unknown"} is missing an event name or run.`
       );
       continue;
     }

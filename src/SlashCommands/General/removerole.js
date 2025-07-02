@@ -19,6 +19,7 @@ module.exports = {
         .setRequired(true)
         .setAutocomplete(true)
     )
+    .setContexts(0)
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
 
   async run(__, interaction) {
@@ -42,7 +43,6 @@ module.exports = {
         role: "",
       };
     }
-
 
     guildData[category][item].role = "";
 

@@ -1,84 +1,29 @@
 const Discord = require("discord.js");
-const { updateStock } = require("../functions/getstock");
-const { updateWeather } = require("../functions/getweather");
-const { QuickDB } = require("quick.db");
-const db = new QuickDB();
-const config = require("../../config.json");
+const {
+  updateStock,
+  updateWeather,
+  sleep,
+  waitUntilNextFiveMinuteMark,
+  collectRolesToPing,
+  sendToChannel,
+  loadGuildChannelsCache,
+  handleUserDMs,
+  updateEventStock,
+  waitUntilNextThirtyMinuteMark,
+  guildChannelsCache,
+} = require("../functions");
 const { logger } = require("console-wizard");
-
-const recentlyPinged = new Map();
-
-// In-memory cache for guild channels
-const guildChannelsCache = new Map();
 
 module.exports = {
   event: "ready",
   async run(client) {
-    logger.success(`Logged in as ${client.user.tag}`);
+    logger.success(`[Event] Logged in as ${client.user.tag}`);
     client.user.setActivity("Grow A Garden", {
       type: Discord.ActivityType.Playing,
     });
 
-    function sleep(ms) {
-      return new Promise((resolve) => setTimeout(resolve, ms));
-    }
-
-    // Load all guild channel info into cache
-    async function loadGuildChannelsCache() {
-      const allGuilds = await db.all();
-      guildChannelsCache.clear();
-      for (const entry of allGuilds) {
-        if (!entry.id.startsWith("guild_")) continue;
-        const guildId = entry.id.split("_")[1];
-        const guildData = entry.value || {};
-        const stockChannelId = guildData.channels?.stock || null;
-        const weatherChannelId = guildData.channels?.weather || null;
-
-        guildChannelsCache.set(guildId, { stockChannelId, weatherChannelId });
-      }
-      logger.info(
-        `Loaded guild channels cache: ${guildChannelsCache.size} guilds.`
-      );
-    }
-
-    // Call this to update cache for a single guild when needed
-    async function updateGuildCache(guildId) {
-      const guildData = await db.get(`guild_${guildId}`);
-      const stockChannelId = guildData?.channels?.stock || null;
-      const weatherChannelId = guildData?.channels?.weather || null;
-      guildChannelsCache.set(guildId, { stockChannelId, weatherChannelId });
-      logger.info(`Updated cache for guild ${guildId}`);
-    }
-
-    // Safe send helper
-    async function sendToChannel(channelId, content, embeds) {
-      if (!channelId) return false;
-      try {
-        const channel = await client.channels.fetch(channelId);
-        if (!channel || !channel.isTextBased()) return false;
-        await channel.send({
-          content,
-          embeds: embeds
-            ? Array.isArray(embeds)
-              ? embeds
-              : [embeds]
-            : undefined,
-        });
-
-        return true;
-      } catch (error) {
-        logger.warn(
-          `Failed to send message to channel ${channelId}: ${error.message}`
-        );
-        return false;
-      }
-    }
-
-    // Your other existing helper functions...
-
-    // STOCK LOOP
     async function startStockLoop() {
-      await loadGuildChannelsCache(); // load cache at start
+      await loadGuildChannelsCache();
 
       let {
         embed: firstEmbed,
@@ -88,13 +33,11 @@ module.exports = {
 
       let lastUpdatedAt = firstUpdatedAt;
 
-      // Prepare ping content once
       const pingRoles = await collectRolesToPing(rawData);
       const pingContent = pingRoles.length
         ? pingRoles.map((id) => `<@&${id}>`).join(" ")
         : null;
 
-      // Send to all guild stock channels using cache
       for (const [
         guildId,
         { stockChannelId },
@@ -103,14 +46,14 @@ module.exports = {
           logger.warn(`[Stock] No stock channel set for guild ${guildId}`);
           continue;
         }
-        await sendToChannel(stockChannelId, pingContent, firstEmbed);
+        await sendToChannel(stockChannelId, pingContent, firstEmbed, client);
       }
 
       logger.success(
         `[Stock] Sent initial embeds to all guild stock channels.`
       );
 
-      await handleUserDMs(rawData);
+      await handleUserDMs(rawData, client);
 
       let isFirstCheck = true;
 
@@ -118,15 +61,34 @@ module.exports = {
         await waitUntilNextFiveMinuteMark();
 
         if (isFirstCheck) {
+          const skipEmbed = new Discord.EmbedBuilder()
+            .setTitle("📊 Stock Check Skipped")
+            .setDescription(
+              "Skipping first stock check after startup — using baseline data."
+            )
+            .setColor(0xffcc00)
+            .setTimestamp();
+
+          for (const [
+            guildId,
+            { stockChannelId },
+          ] of guildChannelsCache.entries()) {
+            if (!stockChannelId) {
+              logger.warn(`[Stock] No stock channel set for guild ${guildId}`);
+              continue;
+            }
+            await sendToChannel(stockChannelId, null, skipEmbed, client);
+          }
+
           logger.info(
-            "[Stock] Skipping first check after startup - baseline data."
+            "[Stock] Skipped first check after startup — baseline sent."
           );
           isFirstCheck = false;
           continue;
         }
 
-        // logger.info("[Stock] Waiting 1 second for stock update...");
-        // await sleep(1 * 1000);
+        logger.info("[Stock] Waiting 1 second for stock update...");
+        await sleep(1 * 1000);
 
         let freshEmbed = null;
         let changed = false;
@@ -135,10 +97,16 @@ module.exports = {
           gear: rawData.Data.gear,
           egg: rawData.Data.egg,
         });
-        const startTime = Date.now(); // start time
+        const startTime = Date.now();
 
         while (!changed) {
           const stockUpdate = await updateStock();
+          if (stockUpdate.updatedAt * 1000 <= lastUpdatedAt) {
+            logger.info(`[Stock] No new stock timestamp yet, retrying...`);
+            await sleep(1 * 1000);
+            if (Date.now() - startTime > 30 * 1000) break;
+            continue;
+          }
           const newDataString = JSON.stringify({
             seeds: stockUpdate.rawData.Data.seeds,
             gear: stockUpdate.rawData.Data.gear,
@@ -161,15 +129,12 @@ module.exports = {
             await sleep(1 * 1000);
           }
 
-          // Check if 60 seconds passed
-          if (Date.now() - startTime > 60 * 1000) {
+          if (Date.now() - startTime > 30 * 1000) {
             logger.warn(
-              `[Stock] No new update after 1 minute. Skipping this cycle.`
+              `[Stock] No new update after 30s. Skipping this cycle.`
             );
             break;
           }
-
-          // await sleep(1 * 1000);
         }
 
         if (freshEmbed) {
@@ -178,16 +143,21 @@ module.exports = {
             ? pingRoles.map((id) => `<@&${id}>`).join(" ")
             : null;
 
-          // Use cached channels for sending updates
           for (const [
             guildId,
             { stockChannelId },
           ] of guildChannelsCache.entries()) {
+            if (!guildId) continue;
             if (!stockChannelId) {
               logger.warn(`[Stock] No stock channel set for guild ${guildId}`);
               continue;
             }
-            await sendToChannel(stockChannelId, pingContent, freshEmbed);
+            await sendToChannel(
+              stockChannelId,
+              pingContent,
+              freshEmbed,
+              client
+            );
           }
 
           logger.success(
@@ -197,172 +167,147 @@ module.exports = {
                 : ` with role pings: ${pingRoles}`
             }`
           );
-          await handleUserDMs(rawData);
+          await handleUserDMs(rawData, client);
         }
       }
     }
 
-    // WEATHER LOOP
+    async function startEventStockLoop() {
+      await loadGuildChannelsCache();
+
+      let {
+        embed: firstEmbed,
+        updateAt: firstUpdatedAt,
+        rawData,
+      } = await updateEventStock();
+
+      let lastUpdatedAt = firstUpdatedAt;
+
+      for (const [
+        guildId,
+        { eventChannelId },
+      ] of guildChannelsCache.entries()) {
+        if (!eventChannelId) {
+          logger.warn(
+            `[Stock] No event stock channel set for guild ${guildId}`
+          );
+          continue;
+        }
+        await sendToChannel(eventChannelId, null, firstEmbed, client);
+      }
+
+      logger.success(
+        `[Event] Sent initial event embeds to all guild stock channels.`
+      );
+
+      while (true) {
+        await waitUntilNextThirtyMinuteMark();
+
+        logger.info("[Event] Waiting 1s for event stock update.");
+        await sleep(1 * 1000);
+
+        let freshStockEmbed = null;
+        let changed = false;
+        let lastDataString = JSON.stringify({
+          eventshop: rawData.Data.eventshop,
+        });
+        const startTime = Date.now();
+
+        while (!changed) {
+          const eventStockUpdate = await eventStockUpdate();
+          if (eventStockUpdate.updatedAt * 1000 <= lastUpdatedAt) {
+            logger.info(
+              `[Event] No new event stock time stamp yet, retrying..`
+            );
+            await sleep(5 * 1000);
+            if (Date.now() - startTime > 30 * 1000) break;
+            continue;
+          }
+          const newDataString = JSON.stringify({
+            eventshop: eventStockUpdate.rawData.Data.eventshop,
+          });
+
+          if (newDataString !== lastDataString) {
+            lastUpdatedAt = eventStockUpdate.updatedAt * 1000;
+            lastDataString = newDataString;
+            freshStockEmbed = eventStockUpdate.embed;
+            rawData = eventStockUpdate.rawData;
+            changed = true;
+            logger.success(
+              `[Event] New event stock detected at ${new Date(
+                lastUpdatedAt
+              ).toLocaleTimeString()}`
+            );
+          } else {
+            logger.error(`[Event] No event update yet, re-trying in 1s.`);
+            await sleep(1 * 1000);
+          }
+
+          if (Date.now() - startTime > 30 * 1000) {
+            logger.warn(
+              `[Event] No new event update after 30s, skipping this cycle.`
+            );
+            break;
+          }
+        }
+
+        if (freshStockEmbed) {
+          for (const [
+            guildId,
+            { eventstockChannelId },
+          ] of guildChannelsCache.entries()) {
+            if (!guildId) continue;
+            if (!eventstockChannelId) {
+              logger.warn(
+                `[Stock] No event stock channel set for guild ${guildId}`
+              );
+              continue;
+            }
+            await sendToChannel(eventstockChannelId, null, firstEmbed, client);
+          }
+          logger.success(`
+        [Event] Sent new embed.`);
+        }
+      }
+    }
+
     async function startWeatherLoop() {
-      await loadGuildChannelsCache(); // load cache at start
+      await loadGuildChannelsCache();
 
       async function sendWeather() {
         const weather = await updateWeather();
-        if (weather === null) return;
-
-        for (const [
-          guildId,
-          { weatherChannelId },
-        ] of guildChannelsCache.entries()) {
-          if (!weatherChannelId) {
-            logger.warn(
-              `[Weather] No weather channel set for guild ${guildId}`
-            );
-            continue;
+        if (weather.embeds.length > 0) {
+          for (const [
+            guildId,
+            { weatherChannelId },
+          ] of guildChannelsCache.entries()) {
+            if (!weatherChannelId) {
+              logger.warn(
+                `[Weather] No weather channel set for guild ${guildId}`
+              );
+              continue;
+            }
+            await sendToChannel(weatherChannelId, null, weather.embeds, client);
           }
-          await sendToChannel(weatherChannelId, null, weather.embeds);
+          logger.success(
+            `[Weather] Sent weather embeds to all guild weather channels.`
+          );
+        } else {
+          logger.info(`[Weather] No active weather found. Skipping send.`);
         }
-
-        logger.success(
-          `[Weather] Sent weather embeds to all guild weather channels.`
-        );
 
         setTimeout(sendWeather, weather.weather[0].duration * 1000);
       }
-
       await sendWeather();
     }
 
-    async function waitUntilNextFiveMinuteMark() {
-      const now = new Date();
-      const mins = now.getMinutes();
-      const secs = now.getSeconds();
-      const ms = now.getMilliseconds();
-
-      const nextMins = Math.ceil((mins + 1) / 5) * 5;
-      const diffMins = nextMins - mins;
-      let waitMs = diffMins * 60 * 1000 - secs * 1000 - ms;
-
-      if (waitMs <= 0) {
-        waitMs = 5 * 60 * 1000 + waitMs; // Add 5 minutes
-      }
-
-      logger.info(`Next 5-min mark in ${Math.round(waitMs / 1000)} seconds`);
-      await sleep(waitMs);
-    }
-
-    function isAtThirtyMinuteMark() {
-      const mins = new Date().getMinutes();
-      return mins < 5 || (mins >= 30 && mins < 35);
-    }
-
-    async function collectRolesToPing(stockData) {
-      const roleSet = new Set();
-      const allGuildKeys = await db.all();
-
-      for (const entry of allGuildKeys) {
-        const guildData = entry.value;
-
-        for (const category of ["seed", "gear", "egg"]) {
-          const categoryItems = guildData[category] || {};
-
-          for (const itemName in categoryItems) {
-            const hasItem = checkForItem(stockData, itemName);
-
-            if (hasItem) {
-              if (category === "egg" && !isAtThirtyMinuteMark()) {
-                logger.warn(
-                  `[Alert] Egg ${itemName} in stock, but skipping **ping** after 5 mins of the half-hour, hour.`
-                );
-                continue;
-              }
-
-              const roleId = categoryItems[itemName].role;
-              if (roleId) {
-                roleSet.add(roleId);
-              }
-            }
-          }
-        }
-      }
-
-      return [...roleSet];
-    }
-
-    async function handleUserDMs(stockData) {
-      const allGuildKeys = await db.all();
-      const now = new Date();
-      function getExpiryUnix(category) {
-        if (category === "egg") {
-          const msPer30Min = 30 * 60 * 1000;
-          const nextExpiry30 = new Date(
-            Math.ceil(now.getTime() / msPer30Min) * msPer30Min
-          );
-          nextExpiry30.setSeconds(nextExpiry30.getSeconds() - 2);
-          return Math.floor(nextExpiry30.getTime() / 1000);
-        } else {
-          const msPer5Min = 5 * 60 * 1000;
-          const nextExpiry5 = new Date(
-            Math.ceil(now.getTime() / msPer5Min) * msPer5Min
-          );
-          nextExpiry5.setSeconds(nextExpiry5.getSeconds() - 2);
-          return Math.floor(nextExpiry5.getTime() / 1000);
-        }
-      }
-
-      for (const entry of allGuildKeys) {
-        const guildData = entry.value;
-
-        for (const category of ["seed", "gear", "egg"]) {
-          const categoryItems = guildData[category] || {};
-
-          for (const itemName in categoryItems) {
-            const hasItem = checkForItem(stockData, itemName);
-            if (hasItem) {
-              if (category === "egg" && !isAtThirtyMinuteMark()) {
-                logger.warn(
-                  `[Alert] Egg ${itemName} in stock, but skipping notification after 5 mins of the half-hour, hour.`
-                );
-                continue;
-              }
-              const users = categoryItems[itemName].users || [];
-              const pretty =
-                config.choices.find(
-                  (choice) => choice.value === `${category}.${itemName}`
-                )?.name || `${category}.${itemName}`;
-
-              const expiryUnix = getExpiryUnix(category);
-
-              for (const userId of users) {
-                const user = await client.users.fetch(userId).catch(() => null);
-                if (user) {
-                  await user.send(
-                    `🔔 **${pretty}** is now in stock!\n⏰ Expires at: <t:${expiryUnix}:t>`
-                  );
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-
-    function checkForItem(stockData, keyword) {
-      const all = [
-        ...(stockData.Data.seeds || []),
-        ...(stockData.Data.gear || []),
-        ...(stockData.Data.egg || []),
-      ];
-      return all.some((item) =>
-        item.name.toLowerCase().includes(keyword.toLowerCase())
-      );
-    }
     startWeatherLoop();
     startStockLoop();
+    startEventStockLoop();
 
     setInterval(async () => {
-      logger.info("Refreshing guild channels cache...");
+      logger.info("[Cache] Refreshing guild channels cache...");
       await loadGuildChannelsCache();
-    }, 10 * 60 * 1000); // 10 minutes
+    }, 5 * 60 * 1000);
   },
 };

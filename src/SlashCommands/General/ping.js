@@ -41,6 +41,7 @@ module.exports = {
           .setColor("#a8f1b0")
           .setTimestamp(),
       ],
+      flags: [MessageFlags.Ephemeral],
     });
   },
 };

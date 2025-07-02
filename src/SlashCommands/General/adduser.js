@@ -8,6 +8,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName("adduser")
     .setDescription("Pick what item you want the bot to DM.")
+    .setContexts(0)
     .addStringOption((option) =>
       option
         .setName("item")
