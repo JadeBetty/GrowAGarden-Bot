@@ -84,9 +84,9 @@ function fetchStockData(url, retryCount = 3) {
 
             const filterAndMap = (obj) =>
               obj
-                .filter((item) => item.quantity !== 0) // Ensure quantity is not "0"
+                .filter((item) => item.quantity !== 0)
                 .map(({ display_name, quantity }) => ({
-                  name: display_name, // Use actual display_name here
+                  name: display_name,
                   stock: quantity.toString(),
                 }));
 
@@ -188,9 +188,9 @@ function buildStockEmbed(stock) {
     .setColor(0x7BE551)
     .setTitle(`Grow a Garden Stock - ${formattedTime}`)
     .addFields(
-      { name: "  🌱 Seed Stock", value: seeds, inline: true },
-      { name: "  ⚙️ Gear Stock", value: gear, inline: true },
-      { name: "  🥚 Egg Stock", value: egg, inline: true }
+      { name: "  🌱 Seed Stock", value: seeds },
+      { name: "  ⚙️ Gear Stock", value: gear },
+      { name: "  🥚 Egg Stock", value: egg }
     )
     .setThumbnail("https://tr.rbxcdn.com/180DAY-1db1ca86a77e30e87e2ffa3e38b8aece/256/256/Image/Webp/noFilter")
     .setFooter({ text: "Grow A Garden", iconURL: "https://tr.rbxcdn.com/180DAY-1db1ca86a77e30e87e2ffa3e38b8aece/256/256/Image/Webp/noFilter"})

@@ -63,37 +63,85 @@ function fetchWeatherData(url, retryCount = 3) {
   });
 }
 
+async function getWeatherInfo(id) {
+  return new Promise((resolve, reject) => {
+    https
+      .get(`https://api.joshlei.com/v2/growagarden/info/${id}`, (res) => {
+        let data = "";
+        res.on("data", (chunk) => (data += chunk));
+        res.on("end", () => {
+          try {
+            let raw = JSON.parse(data);
+
+            if (raw.error) {
+              logger.warn(`[Error] Info API error: ${raw.error}`);
+              const pretty = {
+                name: "Not found",
+                id: "not-found",
+                description: "Not found",
+                icon: "Not found",
+              };
+              return resolve(pretty);
+            }
+
+            let pretty = {
+              name: raw.display_name,
+              id: raw.item_id,
+              description: raw.description,
+              icon: raw.icon
+            };
+
+            resolve(pretty);
+
+            resolve(pretty);
+          } catch (err) {
+            logger.error(
+              `[Weather] Failed to parse info API data. Error msg: ${err.message}`
+            );
+            const pretty = {
+              name: "Not found",
+              id: "not-found",
+              description: "Not found",
+              icon: "Not found",
+            };
+            return resolve(pretty);
+          }
+        });
+      })
+      .on("error", reject);
+  });
+}
+
 function getEmoji(name) {
   const lower = name.toLowerCase();
-  if (lower.includes("rain")) return "🌧";
-  if (lower.includes("thunderstorm")) return "⛈";
+  if (lower.includes("rain")) return ":cloud_rain: ";
+  if (lower.includes("thunderstorm")) return ":thunder_cloud_rain:";
   if (lower.includes("disco")) return "🕺";
-  if (lower.includes("jandelstorm")) return "🐵🌧";
+  if (lower.includes("jandelstorm")) return "🐵:cloud_rain: ";
   if (lower.includes("blackhole")) return "⚫";
   if (lower.includes("djjhai")) return "🎉";
   if (lower.includes("nightevent")) return "🌙";
   if (lower.includes("meteorshower")) return "⭐🚿";
   if (lower.includes("sungod")) return "☀🐒";
   if (lower.includes("jandelfloat")) return "🐵";
-  if (lower.includes("chocolaterain")) return "🍫🌧";
+  if (lower.includes("chocolaterain")) return "🍫:cloud_rain: ";
   if (lower.includes("volcano")) return "🌋";
   if (lower.includes("alieninvasion")) return "👽";
   if (lower.includes("spacetravel")) return "🚀";
   if (lower.includes("windy")) return "🍃";
   if (lower.includes("heatwave")) return "🥵";
-  if (lower.includes("tornado")) return "🌪";
+  if (lower.includes("tornado")) return ":cloud_tornado:";
   return "❓";
 }
 
-function buildWeatherEmbed(weather) {
+
+function buildWeatherEmbed(weather, info) {
   return new EmbedBuilder()
-    .setColor(0x89ff5b)
-    .setTitle(`${weather.name}`)
-    .setDescription(
-      `${getEmoji(weather.id)} There is a ${
-        weather.name
-      } right now!`
-    )
+    .setColor(0x7be551)
+    .setTitle(`${getEmoji(weather.id)}  Weather Update - ${info.name}`)
+    .setDescription(`${info.description}`)
+    .setThumbnail(`${info.icon}`)
+    .setFooter({ text: "Grow A Garden", iconURL: "https://tr.rbxcdn.com/180DAY-1db1ca86a77e30e87e2ffa3e38b8aece/256/256/Image/Webp/noFilter"})
     .setTimestamp();
 }
 
@@ -116,9 +164,10 @@ async function updateWeather() {
     };
 
   const embeds = [];
-  weather.forEach((weather) => {
-    embeds.push(buildWeatherEmbed(weather));
-  });
+  for (const w of weather) {
+    const info = await getWeatherInfo(w.id);
+    embeds.push(buildWeatherEmbed(w, info));
+  }
 
   return {
     embeds,

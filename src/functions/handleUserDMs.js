@@ -3,6 +3,7 @@ const db = new QuickDB();
 const { checkForItem } = require("./helpers");
 const config = require("../../config.json");
 const { isAtThirtyMinuteMark } = require("./helpers")
+const { logger } = require("console-wizard");
 
 async function handleUserDMs(stockData, client) {
   const allGuildKeys = await db.all();
@@ -27,7 +28,6 @@ async function handleUserDMs(stockData, client) {
 
   for (const entry of allGuildKeys) {
     const guildData = entry.value;
-
     for (const category of ["seed", "gear", "egg"]) {
       const categoryItems = guildData[category] || {};
 

@@ -72,7 +72,7 @@ function fetchStockData(url, retryCount = 3) {
 function buildStockEmbed(stock) {
   const event =
     (stock.Data.eventshop || [])
-      .map((item) => `**x${item.stock}** :farmer: ${item.name}`)
+      .map((item) => `**x${item.stock}** ${item.name}`)
       .join("\n") || "None";
 
 

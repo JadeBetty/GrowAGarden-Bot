@@ -55,37 +55,37 @@ module.exports = {
 
       await handleUserDMs(rawData, client);
 
-      let isFirstCheck = true;
+      // let isFirstCheck = true;
 
       while (true) {
         await waitUntilNextFiveMinuteMark();
 
-        if (isFirstCheck) {
-          const skipEmbed = new Discord.EmbedBuilder()
-            .setTitle("📊 Stock Check Skipped")
-            .setDescription(
-              "Skipping first stock check after startup — using baseline data."
-            )
-            .setColor(0xffcc00)
-            .setTimestamp();
+        // if (isFirstCheck) {
+        //   const skipEmbed = new Discord.EmbedBuilder()
+        //     .setTitle("📊 Stock Check Skipped")
+        //     .setDescription(
+        //       "Skipping first stock check after startup — using baseline data."
+        //     )
+        //     .setColor(0xffcc00)
+        //     .setTimestamp();
 
-          for (const [
-            guildId,
-            { stockChannelId },
-          ] of guildChannelsCache.entries()) {
-            if (!stockChannelId) {
-              logger.warn(`[Stock] No stock channel set for guild ${guildId}`);
-              continue;
-            }
-            await sendToChannel(stockChannelId, null, skipEmbed, client);
-          }
+        //   for (const [
+        //     guildId,
+        //     { stockChannelId },
+        //   ] of guildChannelsCache.entries()) {
+        //     if (!stockChannelId) {
+        //       logger.warn(`[Stock] No stock channel set for guild ${guildId}`);
+        //       continue;
+        //     }
+        //     await sendToChannel(stockChannelId, null, skipEmbed, client);
+        //   }
 
-          logger.info(
-            "[Stock] Skipped first check after startup — baseline sent."
-          );
-          isFirstCheck = false;
-          continue;
-        }
+        //   logger.info(
+        //     "[Stock] Skipped first check after startup — baseline sent."
+        //   );
+        //   isFirstCheck = false;
+        //   continue;
+        // }
 
         logger.info("[Stock] Waiting 1 second for stock update...");
         await sleep(1 * 1000);
@@ -214,7 +214,7 @@ module.exports = {
         const startTime = Date.now();
 
         while (!changed) {
-          const eventStockUpdate = await eventStockUpdate();
+          const eventStockUpdate = await updateEventStock();
           if (eventStockUpdate.updatedAt * 1000 <= lastUpdatedAt) {
             logger.info(
               `[Event] No new event stock time stamp yet, retrying..`
