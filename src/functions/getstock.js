@@ -1,148 +1,22 @@
+const WebSocket = require("ws");
 const { EmbedBuilder, time, TimestampStyles } = require("@discordjs/builders");
-const https = require("https");
 const { QuickDB } = require("quick.db");
 const db = new QuickDB();
 const { logger } = require("console-wizard");
 
-function fetchStockDataOLD() {
-  return new Promise((resolve, reject) => {
-    const options = {
-      method: "GET",
-      hostname: "www.gamersberg.com",
-      path: "/api/grow-a-garden/stock",
-      headers: {
-        accept: "*/*",
-        "accept-language": "en-US,en;q=0.5",
-        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0",
-        cookie: "usprivacy=1---; cumulative_time=s%3A621.747.9M0O3EOYoemYI8AFX75ENje0cyiWWvhsn2tTzG0o6Gs; last_session_day=s%3A2025-07-04.nZ4sfHPu%2B2qS%2Bgf7TqmU9ZDnHIWjmtCucAepx%2Fy86N8; session_start=s%3A1751628954893.3C72yp8jiKnltxOEpMN5wuaF1osi%2BD8IMCoOzTLX8xo; _lr_retry_request=true; _lr_env_src_ats=false; _lr_sampling_rate=0",
-        referer: "https://www.gamersberg.com/grow-a-garden/stock",
-        connection: "keep-alive"
-      }
-    };
+const user_id = "758617912566087681";
 
-    const req = https.request(options, (res) => {
-      let data = "";
-      res.on("data", (chunk) => (data += chunk));
-      res.on("end", () => {
-        try {
-          const raw = JSON.parse(data);
-          const dataObj = (raw.data && raw.data[0]) || null;
+const partialStock = {
+  seed: null,
+  gear: null,
+  egg: null,
+  cosmetic: null,
+  eventshop: null,
+  merchant: null,
+  lastUpdate: 0,
+};
 
-          const filterAndMap = (obj) =>
-            Object.entries(obj)
-              .filter(([_, v]) => v !== "0")
-              .map(([name, stock]) => ({ name, stock }));
-
-          const pretty = dataObj
-            ? {
-                updatedAt: Date.now() / 1000,
-                gear: filterAndMap(dataObj.gear),
-                seeds: filterAndMap(dataObj.seeds),
-                egg: (dataObj.eggs || []).map((e) => ({
-                  name: e.name,
-                  stock: e.quantity.toString(),
-                })),
-              }
-            : {
-                updatedAt: Date.now(),
-                gear: [],
-                seeds: [],
-                egg: [],
-                api: false,
-              };
-
-          resolve(pretty);
-        } catch (err) {
-          console.error(err);
-          resolve({
-            updatedAt: Date.now(),
-            gear: [],
-            seeds: [],
-            egg: [],
-            api: false,
-          });
-        }
-      });
-    });
-
-    req.on("error", reject);
-    req.end();
-  });
-}
-
-
-
-function fetchStockData(url, retryCount = 3) {
-  return new Promise((resolve, reject) => {
-    https
-      .get(`${url}`, (res) => {
-        let data = "";
-        res.on("data", (chunk) => (data += chunk));
-        res.on("end", () => {
-          try {
-            let raw = JSON.parse(data);
-
-            if (raw.error && raw.retry_after_seconds && retryCount > 0) {
-              logger.warn(
-                `Rate limited. Retrying in ${raw.retry_after_seconds}s...`
-              );
-              setTimeout(() => {
-                fetchStockData(url, retryCount - 1)
-                  .then(resolve)
-                  .catch(reject);
-              }, raw.retry_after_seconds * 1000);
-              return;
-            }
-
-            if (raw.error) {
-              logger.warn("Unhandled error:", raw.error);
-              const pretty = {
-                updatedAt: Date.now(),
-                gear: [],
-                seeds: [],
-                egg: [],
-                api: false
-              };
-              return resolve(pretty);
-            }
-
-            const filterAndMap = (obj) =>
-              obj
-                .filter((item) => item.quantity !== 0)
-                .map(({ display_name, quantity }) => ({
-                  name: display_name,
-                  stock: quantity.toString(),
-                }));
-
-            const pretty = {
-              updatedAt: raw.seed_stock[0].start_date_unix,
-              gear: filterAndMap(raw.gear_stock),
-              seeds: filterAndMap(raw.seed_stock),
-              egg: filterAndMap(raw.egg_stock),
-              api: true
-            };
-
-            resolve(pretty);
-          } catch (err) {
-            console.log(err);
-            logger.error(
-              `[Error] Failed to fetch data. Error message: ${err.message}`
-            );
-
-            const fallback = {
-              updatedAt: Date.now(),
-              gear: [],
-              seeds: [],
-              egg: [],
-              api: false
-            };
-            resolve(fallback);
-          }
-        });
-      })
-      .on("error", reject);
-  });
-}
+let lastStockData = null;
 
 function getEmoji(name) {
   const lower = name.toLowerCase();
@@ -177,30 +51,30 @@ function getEmoji(name) {
   if (lower.includes("banana")) return "🍌";
   if (lower.includes("cauliflower")) return "🥦";
   if (lower.includes("loquat")) return "🍊";
-  if (lower.includes("magnifying glass")) return "🔍"
+  if (lower.includes("magnifying glass")) return "🔍";
   if (lower.includes("kiwi")) return "🥝";
-  if (lower.includes("pear")) return "🍐"
+  if (lower.includes("pear")) return "🍐";
   if (lower.includes("bell pepper")) return ":bell_pepper:";
   return "❓";
 }
 
 function buildStockEmbed(stock) {
   const seeds =
-    (stock.Data.seeds || [])
+    (stock.seeds || [])
       .map((item) => `**x${item.stock}** ${getEmoji(item.name)} ${item.name}`)
       .join("\n") || "None";
 
   const gear =
-    (stock.Data.gear || [])
+    (stock.gear || [])
       .map((item) => `**x${item.stock}** ${getEmoji(item.name)} ${item.name}`)
       .join("\n") || "None";
 
   const egg =
-    (stock.Data.egg || [])
+    (stock.egg || [])
       .map((item) => `**x${item.stock}** 🥚 ${item.name}`)
       .join("\n") || "None";
 
-  const updatedAtDate = new Date(stock.Data.updatedAt * 1000);
+  const updatedAtDate = new Date(stock.updatedAt * 1000);
   const msPer5Min = 1000 * 60 * 5;
   const roundedDate = new Date(
     Math.floor(updatedAtDate.getTime() / msPer5Min) * msPer5Min
@@ -209,54 +83,48 @@ function buildStockEmbed(stock) {
   const formattedTime = time(updatedAtSeconds, TimestampStyles.ShortTime);
 
   return new EmbedBuilder()
-    .setColor(0x7BE551)
+    .setColor(0x7be551)
     .setTitle(`Grow a Garden Stock - ${formattedTime}`)
     .addFields(
-      { name: "  🌱 Seed Stock", value: seeds },
-      { name: "  ⚙️ Gear Stock", value: gear },
-      { name: "  🥚 Egg Stock", value: egg }
+      { name: "🌱 Seed Stock", value: seeds },
+      { name: "⚙️ Gear Stock", value: gear },
+      { name: "🥚 Egg Stock", value: egg }
     )
-    .setThumbnail("https://tr.rbxcdn.com/180DAY-1db1ca86a77e30e87e2ffa3e38b8aece/256/256/Image/Webp/noFilter")
-    .setFooter({ text: "Grow A Garden", iconURL: "https://tr.rbxcdn.com/180DAY-1db1ca86a77e30e87e2ffa3e38b8aece/256/256/Image/Webp/noFilter"})
+    .setThumbnail(
+      "https://tr.rbxcdn.com/180DAY-1db1ca86a77e30e87e2ffa3e38b8aece/256/256/Image/Webp/noFilter"
+    )
+    .setFooter({
+      text: "Grow A Garden",
+      iconURL:
+        "https://tr.rbxcdn.com/180DAY-1db1ca86a77e30e87e2ffa3e38b8aece/256/256/Image/Webp/noFilter",
+    })
     .setTimestamp();
 }
 
+function handleStockUpdate(mainStock) {
+  const updatedAt =
+    mainStock.seed_stock?.[0]?.start_date_unix ?? Math.floor(Date.now() / 1000);
+  const formatItemList = (list) =>
+    list
+      .filter((item) => item.quantity !== 0)
+      .map((i) => ({
+        name: i.display_name,
+        stock: i.quantity.toString(),
+      }));
 
-let lastStockData = null;
-
-async function updateStock() {
-  let mainStock = await fetchStockData(
-      `https://api.joshlei.com/v2/growagarden/stock`
-    );
-
-  if (mainStock.api === false || !mainStock) mainStock = await fetchStockDataOLD(`https://www.gamersberg.com/api/grow-a-garden/stock`);
-
-  const freshStockData = {
-    Data: {
-      updatedAt: mainStock.updatedAt,
-      gear: mainStock.gear,
-      seeds: mainStock.seeds,
-      egg: mainStock.egg,
-    },
+  const stock = {
+    updatedAt,
+    gear: formatItemList(mainStock.gear_stock || []),
+    seeds: formatItemList(mainStock.seed_stock || []),
+    egg: formatItemList(mainStock.egg_stock || []),
   };
 
-  const eggs = freshStockData.Data.egg;
-
-  if (
-    eggs.length === 1 &&
-    eggs[0].name === "Common Egg" &&
-    parseInt(eggs[0].stock) === 1
-  ) {
-    eggs[0].stock = "3";
-  }
-
-  const embed = buildStockEmbed(freshStockData);
-
+  const embed = buildStockEmbed(stock);
   const newlyAvailable = [];
 
   if (lastStockData !== null) {
     for (const cat of ["seeds", "gear", "egg"]) {
-      for (const item of freshStockData.Data[cat]) {
+      for (const item of stock[cat]) {
         const wasMissing = !lastStockData[cat].some(
           (i) => i.name === item.name
         );
@@ -268,40 +136,117 @@ async function updateStock() {
   }
 
   lastStockData = {
-    seeds: [...freshStockData.Data.seeds],
-    gear: [...freshStockData.Data.gear],
-    egg: [...freshStockData.Data.egg],
+    seeds: [...stock.seeds],
+    gear: [...stock.gear],
+    egg: [...stock.egg],
   };
 
-  const userIds = new Set();
-  const roleTargets = [];
-  const all = await db.all();
-  for (const entry of all) {
-    if (!entry.id.startsWith("guild_")) continue;
-    const guildId = entry.id.split("_")[1];
-    const guildData = entry.value;
+  return { embed, updatedAt: stock.updatedAt, newlyAvailable, stock };
+}
 
-    for (const { category, name } of newlyAvailable) {
-      const key = `${category}.${name.toLowerCase()}`;
-      const sub = guildData[category]?.[name.toLowerCase()];
-      if (sub) {
-        (sub.users || []).forEach((u) => userIds.add(u));
-        if (sub.role) {
-          roleTargets.push({ guildId, roleId: sub.role, item: key });
+function startWebSocketStockListener(onEmbedGenerated) {
+  const ws = new WebSocket(
+    `wss://websocket.joshlei.com/growagarden?user_id=${encodeURIComponent(
+      user_id
+    )}`
+  );
+
+  ws.on("open", () => {
+    logger.success("[WS] WebSocket connected successfully.");
+  });
+
+  ws.on("message", async (data) => {
+  try {
+    const parsed = JSON.parse(data.toString());
+    if (!parsed || typeof parsed !== "object") return;
+
+    const now = Date.now();
+
+
+    if (now - partialStock.lastUpdate > 30 * 1000) {
+      partialStock.seed = null;
+      partialStock.gear = null;
+    }
+
+    partialStock.lastUpdate = now;
+
+    if (parsed.seed_stock) partialStock.seed = parsed.seed_stock;
+    if (parsed.gear_stock) partialStock.gear = parsed.gear_stock;
+
+
+    if (parsed.egg_stock) partialStock.egg = parsed.egg_stock;
+    if (parsed.cosmetic_stock) partialStock.cosmetic = parsed.cosmetic_stock;
+    if (parsed.eventshop_stock) partialStock.eventshop = parsed.eventshop_stock;
+    if (parsed.travelingmerchant_stock) partialStock.merchant = parsed.travelingmerchant_stock;
+
+
+    const stocksReady = partialStock.seed && partialStock.gear;
+    if (!stocksReady) return logger.warn(`[Stock] Stock's not ready.`);
+
+    const fullPayload = {
+      seed_stock: partialStock.seed,
+      gear_stock: partialStock.gear,
+      egg_stock: partialStock.egg ?? [],
+      cosmetic_stock: partialStock.cosmetic ?? [],
+      eventshop_stock: partialStock.eventshop ?? [],
+      travelingmerchant_stock: partialStock.merchant ?? [],
+    };
+
+    partialStock.seed = null;
+    partialStock.gear = null;
+
+    const { embed, updatedAt, newlyAvailable, stock } = handleStockUpdate(fullPayload);
+
+    const userIds = new Set();
+    const roleTargets = [];
+    const all = await db.all();
+
+    for (const entry of all) {
+      if (!entry.id.startsWith("guild_")) continue;
+      const guildId = entry.id.split("_")[1];
+      const guildData = entry.value;
+
+      for (const { category, name } of newlyAvailable) {
+        const key = `${category}.${name.toLowerCase()}`;
+        const sub = guildData[category]?.[name.toLowerCase()];
+        if (sub) {
+          (sub.users || []).forEach((u) => userIds.add(u));
+          if (sub.role) {
+            roleTargets.push({ guildId, roleId: sub.role, item: key });
+          }
         }
       }
     }
-  }
 
-  return {
-    embed,
-    updatedAt: freshStockData.Data.updatedAt,
-    rawData: freshStockData,
-    alert: {
-      userIds: [...userIds],
-      roleTargets,
-    },
-  };
+    onEmbedGenerated({
+      embed,
+      updatedAt,
+      alert: {
+        userIds: [...userIds],
+        roleTargets,
+      },
+      data: {
+        Data: stock,
+      },
+    });
+
+  } catch (err) {
+    console.log(err);
+    logger.error("[WS] Failed to handle WS stock update:", err);
+  }
+});
+
+
+  ws.on("error", (err) => {
+    logger.error("[WS] WebSocket error:", err);
+  });
+
+  ws.on("close", () => {
+    logger.warn("[WS] WebSocket closed. Reconnecting in 5s...");
+    setTimeout(() => startWebSocketStockListener(onEmbedGenerated), 5000);
+  });
 }
 
-module.exports = { updateStock };
+module.exports = {
+  startWebSocketStockListener,
+};
