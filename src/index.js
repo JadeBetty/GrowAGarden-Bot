@@ -67,4 +67,14 @@ registerCommands();
 
 module.exports = { client };
 
+process.on("unhandledRejection", async (error) => {
+  console.log(error);
+});
+process.on("uncaughtException", (error) => {
+  console.log(error);
+});
+process.on("uncaughtExceptionMonitor", (error) => {
+  console.log(error);
+});
+
 client.login(process.env.token);

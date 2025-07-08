@@ -4,27 +4,37 @@ const { QuickDB } = require("quick.db");
 const db = new QuickDB();
 const { logger } = require("console-wizard");
 
-function fetchStockDataOLD(url) {
+function fetchStockDataOLD() {
   return new Promise((resolve, reject) => {
-    https
-      .get(`${url}`, (res) => {
-        let data = "";
-        res.on("data", (chunk) => (data += chunk));
-        res.on("end", () => {
-          try {
-            const raw = JSON.parse(data);
-            const dataObj = (raw.data && raw.data[0]) || null;
+    const options = {
+      method: "GET",
+      hostname: "www.gamersberg.com",
+      path: "/api/grow-a-garden/stock",
+      headers: {
+        accept: "*/*",
+        "accept-language": "en-US,en;q=0.5",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0",
+        cookie: "usprivacy=1---; cumulative_time=s%3A621.747.9M0O3EOYoemYI8AFX75ENje0cyiWWvhsn2tTzG0o6Gs; last_session_day=s%3A2025-07-04.nZ4sfHPu%2B2qS%2Bgf7TqmU9ZDnHIWjmtCucAepx%2Fy86N8; session_start=s%3A1751628954893.3C72yp8jiKnltxOEpMN5wuaF1osi%2BD8IMCoOzTLX8xo; _lr_retry_request=true; _lr_env_src_ats=false; _lr_sampling_rate=0",
+        referer: "https://www.gamersberg.com/grow-a-garden/stock",
+        connection: "keep-alive"
+      }
+    };
 
-            const filterAndMap = (obj) =>
-              Object.entries(obj)
-                .filter(([_, v]) => v !== "0")
-                .map(([name, stock]) => ({ name, stock }));
+    const req = https.request(options, (res) => {
+      let data = "";
+      res.on("data", (chunk) => (data += chunk));
+      res.on("end", () => {
+        try {
+          const raw = JSON.parse(data);
+          const dataObj = (raw.data && raw.data[0]) || null;
 
-            if (dataObj.length === 0) {
-              const pretty = null;
-              resolve(pretty);
-            } else {
-              const pretty = {
+          const filterAndMap = (obj) =>
+            Object.entries(obj)
+              .filter(([_, v]) => v !== "0")
+              .map(([name, stock]) => ({ name, stock }));
+
+          const pretty = dataObj
+            ? {
                 updatedAt: Date.now() / 1000,
                 gear: filterAndMap(dataObj.gear),
                 seeds: filterAndMap(dataObj.seeds),
@@ -32,20 +42,35 @@ function fetchStockDataOLD(url) {
                   name: e.name,
                   stock: e.quantity.toString(),
                 })),
+              }
+            : {
+                updatedAt: Date.now(),
+                gear: [],
+                seeds: [],
+                egg: [],
+                api: false,
               };
-              resolve(pretty);
-            }
-          } catch (err) {
-            console.log(err);
-            logger.error(
-              `[Stock] Failed to fetch data. Error: ${err.message}`
-            );
-          }
-        });
-      })
-      .on("error", reject);
+
+          resolve(pretty);
+        } catch (err) {
+          console.error(err);
+          resolve({
+            updatedAt: Date.now(),
+            gear: [],
+            seeds: [],
+            egg: [],
+            api: false,
+          });
+        }
+      });
+    });
+
+    req.on("error", reject);
+    req.end();
   });
 }
+
+
 
 function fetchStockData(url, retryCount = 3) {
   return new Promise((resolve, reject) => {
@@ -58,7 +83,6 @@ function fetchStockData(url, retryCount = 3) {
             let raw = JSON.parse(data);
 
             if (raw.error && raw.retry_after_seconds && retryCount > 0) {
-              console.log(raw);
               logger.warn(
                 `Rate limited. Retrying in ${raw.retry_after_seconds}s...`
               );
@@ -205,7 +229,7 @@ async function updateStock() {
       `https://api.joshlei.com/v2/growagarden/stock`
     );
 
-  if (mainStock.api === false) mainStock = await fetchStockDataOLD(`https://www.gamersberg.com/api/grow-a-garden/stock`);
+  if (mainStock.api === false || !mainStock) mainStock = await fetchStockDataOLD(`https://www.gamersberg.com/api/grow-a-garden/stock`);
 
   const freshStockData = {
     Data: {

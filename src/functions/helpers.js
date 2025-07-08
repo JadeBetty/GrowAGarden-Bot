@@ -66,7 +66,7 @@ async function collectRolesToPing(stockData) {
         if (hasItem) {
           if (category === "egg" && !isAtThirtyMinuteMark()) {
             logger.warn(
-              `[Alert] Egg ${itemName} in stock, but skipping **ping**.`
+              `[Alert] Egg ${itemName} in stock, but skipping ping.`
             );
             continue;
           }
@@ -88,11 +88,48 @@ function isAtThirtyMinuteMark() {
   return mins < 5 || (mins >= 30 && mins < 35);
 }
 
+const merchantHoursUTC = [0, 4, 8, 12, 16, 20];
+
+function getNextMerchantTime() {
+  const now = new Date();
+  const nowUnix = Math.floor(now.getTime() / 1000);
+
+  const baseDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+
+  const spawnTimes = [];
+
+  for (let d = 0; d <= 1; d++) {
+    for (const hour of merchantHoursUTC) {
+      const spawnTime = new Date(baseDate.getTime() + d * 86400000);
+      spawnTime.setUTCHours(hour, 0, 0, 0);
+      spawnTimes.push(Math.floor(spawnTime.getTime() / 1000));
+    }
+  }
+
+  const next = spawnTimes.find((unix) => unix > nowUnix);
+  return next;
+}
+
+
+function waitUntilUnix(targetUnix) {
+  const waitMs = targetUnix * 1000 - Date.now();
+  if (waitMs <= 0) {
+    logger.warn(`[Merchant] waitMs is in the past (${waitMs}ms). Skipping wait.`);
+    return Promise.resolve();
+  }
+  return sleep(waitMs);
+}
+
+
+
+
 module.exports = {
   sleep,
   waitUntilNextFiveMinuteMark,
   checkForItem,
   collectRolesToPing,
   isAtThirtyMinuteMark,
-  waitUntilNextThirtyMinuteMark
+  waitUntilNextThirtyMinuteMark,
+  getNextMerchantTime,
+  waitUntilUnix
 };

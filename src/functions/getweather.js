@@ -79,7 +79,7 @@ async function getWeatherInfo(id) {
                 name: "Not found",
                 id: "not-found",
                 description: "Not found",
-                icon: "Not found",
+                icon: "https://images-ext-1.discordapp.net/external/Rd1pMc1eVWWy6x9_pxPdANdaV4AA8y1b431OcJGImSQ/https/tr.rbxcdn.com/180DAY-1db1ca86a77e30e87e2ffa3e38b8aece/256/256/Image/Webp/noFilter?format=webp",
               };
               return resolve(pretty);
             }
@@ -102,7 +102,7 @@ async function getWeatherInfo(id) {
               name: "Not found",
               id: "not-found",
               description: "Not found",
-              icon: "Not found",
+              icon: "https://images-ext-1.discordapp.net/external/Rd1pMc1eVWWy6x9_pxPdANdaV4AA8y1b431OcJGImSQ/https/tr.rbxcdn.com/180DAY-1db1ca86a77e30e87e2ffa3e38b8aece/256/256/Image/Webp/noFilter?format=webp",
             };
             return resolve(pretty);
           }
@@ -140,7 +140,7 @@ function buildWeatherEmbed(weather, info) {
     .setColor(0x7be551)
     .setTitle(`${getEmoji(weather.id)}  Weather Update - ${info.name}`)
     .setDescription(`${info.description}`)
-    .setThumbnail(`${info.icon}`)
+    .setThumbnail(`${info.icon || "https://images-ext-1.discordapp.net/external/Rd1pMc1eVWWy6x9_pxPdANdaV4AA8y1b431OcJGImSQ/https/tr.rbxcdn.com/180DAY-1db1ca86a77e30e87e2ffa3e38b8aece/256/256/Image/Webp/noFilter?format=webp"}`)
     .setFooter({ text: "Grow A Garden", iconURL: "https://tr.rbxcdn.com/180DAY-1db1ca86a77e30e87e2ffa3e38b8aece/256/256/Image/Webp/noFilter"})
     .setTimestamp();
 }
@@ -153,14 +153,7 @@ async function updateWeather() {
   if (!Array.isArray(weather) || weather.length === 0)
     return {
       embeds: [],
-      weather: [
-        {
-          name: "Not found",
-          id: "not-found",
-          duration: 60,
-          startAt: 0,
-        },
-      ],
+      weather: [],
     };
 
   const embeds = [];

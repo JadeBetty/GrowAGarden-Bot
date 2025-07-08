@@ -4,6 +4,7 @@ const handleUserDMs = require("./handleUserDMs");
 const helpers = require("./helpers");
 const discordClient = require("./discordClient");
 const geteventstock = require("./geteventstock");
+const gettravellingmerchant = require("./gettravellingmerchant")
 
 module.exports = {
   ...getstock,
@@ -11,5 +12,6 @@ module.exports = {
   ...helpers,
   ...discordClient,
   ...handleUserDMs,
-  ...geteventstock
+  ...geteventstock,
+  ...gettravellingmerchant
 };

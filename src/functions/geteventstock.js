@@ -39,14 +39,18 @@ function fetchStockData(url, retryCount = 3) {
 
             const filterAndMap = (obj) =>
               obj
-                .filter((item) => item.quantity !== 0) 
+                .filter((item) => item.quantity !== 0)
                 .map(({ display_name, quantity }) => ({
-                  name: display_name, 
+                  name: display_name,
                   stock: quantity.toString(),
                 }));
 
             const pretty = {
-              updatedAt: raw.eventshop_stock[0].start_date_unix,
+              updatedAt:
+                Array.isArray(raw.eventshop_stock) &&
+                raw.eventshop_stock.length > 0
+                  ? raw.eventshop_stock[0].start_date_unix
+                  : Date.now(),
               eventstock: filterAndMap(raw.eventshop_stock),
               api: true,
             };
@@ -74,7 +78,6 @@ function buildStockEmbed(stock) {
     (stock.Data.eventshop || [])
       .map((item) => `**x${item.stock}** ${item.name}`)
       .join("\n") || "None";
-
 
   const updatedAtDate = new Date(stock.Data.updatedAt * 1000);
   const msPer5Min = 1000 * 60 * 5;

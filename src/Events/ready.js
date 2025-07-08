@@ -8,6 +8,9 @@ const {
   sendToChannel,
   loadGuildChannelsCache,
   handleUserDMs,
+  updateMerchantStock,
+  getNextMerchantTime,
+  waitUntilUnix,
   updateEventStock,
   waitUntilNextThirtyMinuteMark,
   guildChannelsCache,
@@ -87,8 +90,8 @@ module.exports = {
         //   continue;
         // }
 
-        logger.info("[Stock] Waiting 1 second for stock update...");
-        await sleep(1 * 1000);
+        logger.info("[Stock] Waiting for stock update...");
+        await sleep(300);
 
         let freshEmbed = null;
         let changed = false;
@@ -101,12 +104,36 @@ module.exports = {
 
         while (!changed) {
           const stockUpdate = await updateStock();
-          if (stockUpdate.updatedAt * 1000 <= lastUpdatedAt) {
+          const updatedAtMs = stockUpdate.updatedAt * 1000;
+          const updatedMinute = new Date(updatedAtMs).getMinutes();
+          const currentMinute = new Date().getMinutes();
+
+          if (updatedAtMs <= lastUpdatedAt) {
             logger.info(`[Stock] No new stock timestamp yet, retrying...`);
-            await sleep(1 * 1000);
-            if (Date.now() - startTime > 30 * 1000) break;
+            await sleep(1000);
+            if (Date.now() - startTime > 30 * 1000) {
+              logger.warn(
+                "[Stock] Skipping current stock, API did not update."
+              );
+              break;
+            }
             continue;
           }
+
+          if (updatedMinute !== currentMinute) {
+            logger.warn(
+              `[Stock] Stock updated at ${updatedMinute}, but current time is ${currentMinute}. Waiting for fresh data...`
+            );
+            await sleep(1000);
+            if (Date.now() - startTime > 30 * 1000) {
+              logger.warn(
+                "[Stock] No matching minute update after 30s. Skipping this cycle."
+              );
+              break;
+            }
+            continue;
+          }
+
           const newDataString = JSON.stringify({
             seeds: stockUpdate.rawData.Data.seeds,
             gear: stockUpdate.rawData.Data.gear,
@@ -172,86 +199,88 @@ module.exports = {
       }
     }
 
-    async function startEventStockLoop() {
+    async function startMerchantLoop(client) {
       await loadGuildChannelsCache();
 
       let {
         embed: firstEmbed,
-        updateAt: firstUpdatedAt,
+        updatedAt: firstUpdatedAt,
         rawData,
-      } = await updateEventStock();
+      } = await updateMerchantStock();
 
       let lastUpdatedAt = firstUpdatedAt;
+      let lastDataString = JSON.stringify(rawData.Data.merchantStock);
 
       for (const [
         guildId,
-        { eventChannelId },
+        { merchantChannelId },
       ] of guildChannelsCache.entries()) {
-        if (!eventChannelId) {
+        if (!merchantChannelId) {
           logger.warn(
-            `[Stock] No event stock channel set for guild ${guildId}`
+            `[Merchant] No merchant channel set for guild ${guildId}`
           );
           continue;
         }
-        await sendToChannel(eventChannelId, null, firstEmbed, client);
+        await sendToChannel(merchantChannelId, null, firstEmbed, client);
       }
 
-      logger.success(
-        `[Event] Sent initial event embeds to all guild stock channels.`
-      );
+      logger.success(`[Merchant] Sent initial merchant stock embeds.`);
 
       while (true) {
-        await waitUntilNextThirtyMinuteMark();
+        const nextUnix = getNextMerchantTime();
+        const formatted = new Date(nextUnix * 1000).toLocaleTimeString();
+        logger.info(
+          `[Merchant] Waiting until next merchant time: ${formatted}`
+        );
+        
+        await waitUntilUnix(nextUnix);
+        logger.info("[Merchant] Waiting 1s before checking merchant stock...");
+        await sleep(1000);
 
-        logger.info("[Event] Waiting 1s for event stock update.");
-        await sleep(1 * 1000);
-
-        let freshStockEmbed = null;
+        let freshEmbed = null;
         let changed = false;
-        let lastDataString = JSON.stringify({
-          eventshop: rawData.Data.eventshop,
-        });
         const startTime = Date.now();
 
         while (!changed) {
-          const eventStockUpdate = await updateEventStock();
-          if (eventStockUpdate.updatedAt * 1000 <= lastUpdatedAt) {
-            logger.info(
-              `[Event] No new event stock time stamp yet, retrying..`
-            );
-            await sleep(5 * 1000);
-            if (Date.now() - startTime > 30 * 1000) break;
+          const merchantUpdate = await updateMerchantStock();
+          if (merchantUpdate.updatedAt * 1000 <= lastUpdatedAt) {
+            logger.info(`[Merchant] No new merchant stock timestamp yet.`);
+            await sleep(5000);
+            if (Date.now() - startTime > 30000) break;
             continue;
           }
-          const newDataString = JSON.stringify({
-            eventshop: eventStockUpdate.rawData.Data.eventshop,
-          });
+
+          const newDataString = JSON.stringify(
+            merchantUpdate.rawData.Data.merchantStock
+          );
 
           if (newDataString !== lastDataString) {
-            lastUpdatedAt = eventStockUpdate.updatedAt * 1000;
+            lastUpdatedAt = merchantUpdate.updatedAt * 1000;
             lastDataString = newDataString;
-            freshStockEmbed = eventStockUpdate.embed;
-            rawData = eventStockUpdate.rawData;
+            freshEmbed = merchantUpdate.embed;
+            rawData = merchantUpdate.rawData;
             changed = true;
             logger.success(
-              `[Event] New event stock detected at ${new Date(
+              `[Merchant] New merchant stock at ${new Date(
                 lastUpdatedAt
               ).toLocaleTimeString()}`
             );
           } else {
-            logger.error(`[Event] No event update yet, re-trying in 1s.`);
-            await sleep(1 * 1000);
+            logger.warn(
+              `[Merchant] Merchant stock not changed yet, retrying...`
+            );
+            await sleep(5000);
           }
 
-          if (Date.now() - startTime > 30 * 1000) {
+          if (Date.now() - startTime > 30000) {
             logger.warn(
-              `[Event] No new event update after 30s, skipping this cycle.`
+              `[Merchant] No merchant update after 30s. Skipping this cycle.`
             );
             break;
           }
         }
 
-        if (freshStockEmbed) {
+        if (freshEmbed) {
           for (const [
             guildId,
             { eventstockChannelId },
@@ -259,51 +288,163 @@ module.exports = {
             if (!guildId) continue;
             if (!eventstockChannelId) {
               logger.warn(
-                `[Stock] No event stock channel set for guild ${guildId}`
+                `[Merchant] No merchant channel set for guild ${guildId}`
               );
               continue;
             }
-            await sendToChannel(eventstockChannelId, null, firstEmbed, client);
+            await sendToChannel(eventstockChannelId, null, freshEmbed, client);
           }
-          logger.success(`
-        [Event] Sent new embed.`);
+          logger.success(`[Merchant] Sent new merchant embed.`);
         }
       }
     }
+
+    // async function startEventStockLoop() {
+    //   console.log("idk what the actual fuck happened but start event stock loop works")
+    //   await loadGuildChannelsCache();
+
+    //   let {
+    //     embed: firstEmbed,
+    //     updateAt: firstUpdatedAt,
+    //     rawData,
+    //   } = await updateEventStock();
+
+    //   let lastUpdatedAt = firstUpdatedAt;
+
+    //   for (const [
+    //     guildId,
+    //     { eventChannelId },
+    //   ] of guildChannelsCache.entries()) {
+    //     if (!eventChannelId) {
+    //       logger.warn(
+    //         `[Stock] No event stock channel set for guild ${guildId}`
+    //       );
+    //       continue;
+    //     }
+    //     await sendToChannel(eventChannelId, null, firstEmbed, client);
+    //   }
+
+    //   logger.success(
+    //     `[Event] Sent initial event embeds to all guild stock channels.`
+    //   );
+
+    //   while (true) {
+    //     await waitUntilNextThirtyMinuteMark();
+
+    //     logger.info("[Event] Waiting 1s for event stock update.");
+    //     await sleep(1 * 1000);
+
+    //     let freshStockEmbed = null;
+    //     let changed = false;
+    //     let lastDataString = JSON.stringify({
+    //       eventshop: rawData.Data.eventshop,
+    //     });
+    //     const startTime = Date.now();
+
+    //     while (!changed) {
+    //       const eventStockUpdate = await updateEventStock();
+    //       if (eventStockUpdate.updatedAt * 1000 <= lastUpdatedAt) {
+    //         logger.info(
+    //           `[Event] No new event stock time stamp yet, retrying..`
+    //         );
+    //         await sleep(5 * 1000);
+    //         if (Date.now() - startTime > 30 * 1000) break;
+    //         continue;
+    //       }
+    //       const newDataString = JSON.stringify({
+    //         eventshop: eventStockUpdate.rawData.Data.eventshop,
+    //       });
+
+    //       if (newDataString !== lastDataString) {
+    //         lastUpdatedAt = eventStockUpdate.updatedAt * 1000;
+    //         lastDataString = newDataString;
+    //         freshStockEmbed = eventStockUpdate.embed;
+    //         rawData = eventStockUpdate.rawData;
+    //         changed = true;
+    //         logger.success(
+    //           `[Event] New event stock detected at ${new Date(
+    //             lastUpdatedAt
+    //           ).toLocaleTimeString()}`
+    //         );
+    //       } else {
+    //         logger.error(`[Event] No event update yet, re-trying in 1s.`);
+    //         await sleep(1 * 1000);
+    //       }
+
+    //       if (Date.now() - startTime > 30 * 1000) {
+    //         logger.warn(
+    //           `[Event] No new event update after 30s, skipping this cycle.`
+    //         );
+    //         break;
+    //       }
+    //     }
+
+    //     if (freshStockEmbed) {
+    //       for (const [
+    //         guildId,
+    //         { eventstockChannelId },
+    //       ] of guildChannelsCache.entries()) {
+    //         if (!guildId) continue;
+    //         if (!eventstockChannelId) {
+    //           logger.warn(
+    //             `[Stock] No event stock channel set for guild ${guildId}`
+    //           );
+    //           continue;
+    //         }
+    //         await sendToChannel(eventstockChannelId, null, firstEmbed, client);
+    //       }
+    //       logger.success(`
+    //     [Event] Sent new embed.`);
+    //     }
+    //   }
+    // }
 
     async function startWeatherLoop() {
       await loadGuildChannelsCache();
 
-      async function sendWeather() {
+      let lastWeatherKey = null;
+
+      async function checkAndSendWeather() {
         const weather = await updateWeather();
-        if (weather.embeds.length > 0) {
-          for (const [
-            guildId,
-            { weatherChannelId },
-          ] of guildChannelsCache.entries()) {
-            if (!weatherChannelId) {
-              logger.warn(
-                `[Weather] No weather channel set for guild ${guildId}`
-              );
-              continue;
-            }
-            await sendToChannel(weatherChannelId, null, weather.embeds, client);
-          }
-          logger.success(
-            `[Weather] Sent weather embeds to all guild weather channels.`
-          );
-        } else {
-          logger.info(`[Weather] No active weather found. Skipping send.`);
+
+        if (weather.embeds.length === 0) {
+          logger.info(`[Weather] No active weather. Skipping.`);
+          return;
         }
 
-        setTimeout(sendWeather, weather.weather[0].duration * 1000);
+        const currentWeatherKey = weather.weather
+          .map((w) => `${w.id || w.name}-${w.startTime}`)
+          .join("|");
+
+        if (currentWeatherKey === lastWeatherKey) {
+          logger.info(`[Weather] No change in weather. Skipping send.`);
+          return;
+        }
+
+        lastWeatherKey = currentWeatherKey;
+
+        for (const [
+          guildId,
+          { weatherChannelId },
+        ] of guildChannelsCache.entries()) {
+          if (!weatherChannelId) {
+            logger.warn(`[Weather] No weather channel for guild ${guildId}`);
+            continue;
+          }
+          await sendToChannel(weatherChannelId, null, weather.embeds, client);
+        }
+
+        logger.success(`[Weather] Sent updated weather embed.`);
       }
-      await sendWeather();
+
+      await checkAndSendWeather();
+      setInterval(checkAndSendWeather, 60 * 1000);
     }
 
     startWeatherLoop();
     startStockLoop();
-    startEventStockLoop();
+    startMerchantLoop();
+    //startEventStockLoop(); no event stock right now.
 
     setInterval(async () => {
       logger.info("[Cache] Refreshing guild channels cache...");
