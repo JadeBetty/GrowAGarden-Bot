@@ -14,7 +14,8 @@ This bot is still currently in development. Bugs should be expected.
 - Install NPM, NodeJS
 - Clone this git repo
 - Rename .env.example to .env and fill in your bot token there
-- Rename config.example.json to config.json and fill in your clientIDs and your stock channel there.
+- Rename config.example.json to config.json and fill in your clientID.
+- Go to ./functions/buildEmbds.js line 7 12 17 and change from getStockEmoji to getStock.
 - Open up terminal and install the packages in package.json.
 - Run the boy by node src/index.js or using nodemon src/index.js
 - Give a star for this github repo :D
