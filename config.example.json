@@ -1,17 +1,28 @@
 {
-  "clientId": "",
-  "alertChannelId": "",
+  "clientId": "1381642851208921180",
   "choices": [
     { "name": "Sugar Apple", "value": "seed.sugar" },
-    { "name": "Feijoa", "value": "seed.feijoa" },
-    { "name": "Pineapple", "value": "seed.pineapple"},
-    { "name": "Loquat", "value": "seed.loquat"},
-    { "name": "Prickly Pear", "value": "seed.prickly-pear"},
-    { "name": "Bell Pepper", "value": "seed.bell"},
+    { "name": "Cacao", "value": "seed.cacao"},
+    { "name": "Beanstalk", "value": "seed.beanstalk"},
+    { "name": "Ember Lily", "value": "seed.ember"},
+    { "name": "Grape", "value": "seed.grape"},
+    { "name": "Mushroom", "value": "seed.mushroom"},
+    { "name": "Pepper", "value": "seed.pepper"},
+    { "name": "Burning Bud", "value": "seed.burning"},
+    { "name": "Mango", "value": "seed.mango"},
+    { "name": "Watermelon", "value": "seed.watermelon"},
+    { "name": "Pumpkin", "value": "seed.pumpkin"},
+    { "name": "Giant Pinecone", "value": "seed.giant"},
     { "name": "Master Sprinkler", "value": "gear.master" },
+    { "name": "Godly Sprinkler", "value": "gear.godly" },
+    { "name": "Tanning Mirror", "value": "gear.mirror" },
+    { "name": "Medium Toy", "value": "gear.toy"},
+    { "name": "Medium Treat", "value": "gear.treat"},
+    { "name": "Levelup lolipop", "value": "gear.lolipop"},
     { "name": "Bug Egg", "value": "egg.bug" },
     { "name": "Mythical Egg", "value": "egg.mythical" },
     { "name": "Paradise Egg", "value": "egg.paradise" },
-    { "name": "Common Egg", "value": "egg.common"}
+    { "name": "Common Egg", "value": "egg.common" },
+    { "name": "Legendary Egg", "value": "egg.legendary"}
   ]
 }
