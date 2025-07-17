@@ -1,17 +1,14 @@
-const getstock = require("./getstock");
-const getweather = require("./getweather");
-const handleUserDMs = require("./handleUserDMs");
-const helpers = require("./helpers");
-const discordClient = require("./discordClient");
-const geteventstock = require("./geteventstock");
-const gettravellingmerchant = require("./gettravellingmerchant")
+const startwebsocket = require("./startwebsocket.js");
+const getweatherinfo = require("./getWeatherInfo.js");
+const discordClient = require("./discordClient.js");
+const buildEmbeds = require("./buildEmbeds.js");
+const helpers = require("./helpers.js");
+
 
 module.exports = {
-  ...getstock,
-  ...getweather,
-  ...helpers,
-  ...discordClient,
-  ...handleUserDMs,
-  ...geteventstock,
-  ...gettravellingmerchant
-};
+    ...startwebsocket,
+    ...getweatherinfo,
+    ...buildEmbeds,
+    ...discordClient,
+    ...helpers
+}

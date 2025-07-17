@@ -1,8 +1,7 @@
 const { QuickDB } = require("quick.db");
 const db = new QuickDB();
-const { checkForItem } = require("./helpers");
+const { checkForItem } = require("./helpers.js")
 const config = require("../../config.json");
-const { isAtThirtyMinuteMark } = require("./helpers")
 const { logger } = require("console-wizard");
 
 async function handleUserDMs(stockData, client) {
@@ -60,6 +59,11 @@ async function handleUserDMs(stockData, client) {
       }
     }
   }
+}
+
+function isAtThirtyMinuteMark() {
+  const mins = new Date().getMinutes();
+  return mins < 5 || (mins >= 30 && mins < 35);
 }
 
 module.exports = {

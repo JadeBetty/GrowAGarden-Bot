@@ -1,6 +1,14 @@
 # GrowAGarden-Bot
 A simple, easy to use bot for Grow A Garden stock.
 
+# How does it work?
+Currently I'm using websocket, but if you look at the bot's first commits, it used polling. 
+
+# WARNINGS
+I am not responsible in anyway where the bot goes down. You may fork this bot knowing that errors should be fixed yourself. If you want, you can let me know about issues or errors on the issues page in the Github Repository.
+
+This bot is still currently in development. Bugs should be expected.
+
 # How to use 
 
 - Install NPM, NodeJS
@@ -9,7 +17,8 @@ A simple, easy to use bot for Grow A Garden stock.
 - Rename config.example.json to config.json and fill in your clientIDs and your stock channel there.
 - Open up terminal and install the packages in package.json.
 - Run the boy by node src/index.js or using nodemon src/index.js
-- Give me credit for the bot.
+- Give a star for this github repo :D
+
 
 
 # Licenses
