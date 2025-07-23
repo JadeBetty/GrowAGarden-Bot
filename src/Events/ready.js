@@ -1,6 +1,6 @@
 const Discord = require("discord.js");
 const { logger } = require("console-wizard");
-const { startWebsocket } = require("../functions/startwebsocket")
+const { startWebsocket, setClient } = require("../functions")
 
 
 module.exports = {
@@ -10,6 +10,7 @@ module.exports = {
         client.user.setActivity("Stocks", {
             type: Discord.ActivityType.Watching
         });
-        startWebsocket(client);
+        setClient(client);
+        startWebsocket();
     }
 }

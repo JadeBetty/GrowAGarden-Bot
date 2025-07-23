@@ -17,13 +17,6 @@ module.exports = {
         new EmbedBuilder()
           .setTitle(`${client.user.username}'s Info`)
           .addFields(
-            { name: `Node`, value: `${process.version}`, inline: true },
-            { name: `Library`, value: `DiscordJS V14.20`, inline: true },
-            {
-              name: `Founded by:`,
-              value: `<@!758617912566087681>`,
-              inline: true,
-            },
             {
               name: `Servers`,
               value: `${client.guilds.cache.size}`,
@@ -34,10 +27,6 @@ module.exports = {
             { name: `Uptime`, value: `${clientUptime}`, inline: true }
           )
           .setThumbnail(client.user.displayAvatarURL())
-          .setAuthor({
-            name: client.user.tag,
-            iconURL: client.user.displayAvatarURL(),
-          })
           .setColor("#a8f1b0")
           .setTimestamp(),
       ],

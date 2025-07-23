@@ -3,3 +3,4 @@ config.json
 package-lock.json
 node_modules
 json.sqlite
+json2.sqlite

@@ -4,11 +4,6 @@ A simple, easy to use bot for Grow A Garden stock.
 # How does it work?
 Currently I'm using websocket, but if you look at the bot's first commits, it used polling. 
 
-# WARNINGS
-I am not responsible in anyway where the bot goes down. You may fork this bot knowing that errors should be fixed yourself. If you want, you can let me know about issues or errors on the issues page in the Github Repository.
-
-This bot is still currently in development. Bugs should be expected.
-
 # How to use 
 
 - Install NPM, NodeJS
@@ -20,6 +15,10 @@ This bot is still currently in development. Bugs should be expected.
 - Run the boy by node src/index.js or using nodemon src/index.js
 - Give a star for this github repo :D
 
+# WARNINGS
+I am not responsible in anyway where the bot goes down. You may fork this bot knowing that errors should be fixed yourself. If you want, you can let me know about issues or errors on the issues page in the Github Repository.
+
+This bot is still currently in development. Bugs should be expected.
 
 
 # Licenses

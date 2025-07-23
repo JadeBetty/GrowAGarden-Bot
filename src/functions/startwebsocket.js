@@ -1,17 +1,17 @@
 const WebSocket = require("ws");
 const { logger } = require("console-wizard");
-const { handleUpdate } = require("./handleUpdate");
-
 const { clientId } = require("../../config.json");
+const { handleUpdate } = require("./handleUpdate");
 const {
   sendToChannel,
   loadGuildChannelsCache,
   guildChannelsCache,
 } = require("./discordClient.js");
-
 const { handleUserDMs } = require("./handleUserDMs.js");
+const { canSendPing, getClient } = require("./helpers.js");
 
-function startWebsocket(client) {
+function startWebsocket() {
+  const client = getClient();
   const ws = new WebSocket(
     `wss://websocket.joshlei.com/growagarden?user_id=${encodeURIComponent(
       clientId
@@ -31,8 +31,6 @@ function startWebsocket(client) {
 
       if (Data.type === "SGE") {
         logger.info("[Stock] Detected new stock.");
-        const pingRoles = Data.alert.roleTargets.map((r) => `<@&${r.roleId}>`);
-        const pingContent = pingRoles.length ? pingRoles.join(" ") : null;
         await loadGuildChannelsCache();
         for (const [
           guildId,
@@ -42,12 +40,25 @@ function startWebsocket(client) {
             logger.warn(`[Stock] No stock channel set for guild ${guildId}`);
             continue;
           }
+
+          const rolesToPing = [];
+
+          for (const target of Data.alert.roleTargets) {
+            if (target.guildId !== guildId) continue;
+            const category = target.item.split(".")[0];
+            if (await canSendPing(guildId, target.roleId, category)) {
+              rolesToPing.push(`<@&${target.roleId}>`);
+            }
+          }
+          const pingContent = rolesToPing.length ? rolesToPing.join(" ") : null;
           await sendToChannel(stockChannelId, pingContent, Data.embed, client);
           await handleUserDMs(Data, client);
-          logger.success("[Stock] Sucessfully sent stock embed.");
+          logger.success(
+            `[Stock] Sent stock embed & pings for guild ${guildId}`
+          );
         }
-      } else if (Data.type === "weather") {
-        if (Data.activeWeather.length === 0)
+      } if (Data.type === "weather") {
+        if (Data.activeWeather.length === 0 || Data.activeWeather)
           return logger.warn("[Weather] Seems like no weather is found");
         await loadGuildChannelsCache();
         for (const [
@@ -60,7 +71,20 @@ function startWebsocket(client) {
           }
           await sendToChannel(weatherChannelId, null, Data.embed, client);
         }
-      } else if (Data.type === "TMS") {
+      } if (Data.type === "TMS") {
+        for (const [
+          guildId,
+          { eventChannelId },
+        ] of guildChannelsCache.entries()) {
+          if (!eventChannelId) {
+            logger.warn(
+              `[Stock] No traveling merchant stock channel set for guild ${guildId}`
+            );
+            continue;
+          }
+          await sendToChannel(eventChannelId, null, Data.embed, client);
+        }
+      } if (Data.type === "EVENT") {
         for (const [
           guildId,
           { eventChannelId },
@@ -86,7 +110,7 @@ function startWebsocket(client) {
   });
 
   ws.on("close", () => {
-    logger.warn("[Websocket] Websocket clsoed, Reconnecting in 5s..");
+    logger.warn("[Websocket] Websocket closed, Reconnecting in 5s..");
     setTimeout(() => startWebsocket(), 5000);
   });
 }

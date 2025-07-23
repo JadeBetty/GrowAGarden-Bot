@@ -1,4 +1,8 @@
-const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require("discord.js");
+const {
+  SlashCommandBuilder,
+  PermissionFlagsBits,
+  MessageFlags,
+} = require("discord.js");
 const { QuickDB } = require("quick.db");
 const db = new QuickDB();
 const config = require("../../../config.json");
@@ -8,13 +12,13 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName("setrole")
     .setDescription("Set a role to be pinged when an item is in stock.")
-    .addRoleOption(option =>
+    .addRoleOption((option) =>
       option
         .setName("role")
         .setDescription("Role to mention when the item is in stock")
         .setRequired(true)
     )
-    .addStringOption(option =>
+    .addStringOption((option) =>
       option
         .setName("item")
         .setDescription("The item")
@@ -42,13 +46,10 @@ module.exports = {
 
     if (!guildData[category]) guildData[category] = {};
     if (!guildData[category][item]) {
-      guildData[category][item] = {
-        users: [],
-        role: "",
-      };
+      guildData[category][item] = { users: [], role: "" };
     }
-
     guildData[category][item].role = role.id;
+
     await db.set(`guild_${guildid}`, guildData);
     const pretty =
       config.choices.find((choice) => choice.value === input)?.name ||

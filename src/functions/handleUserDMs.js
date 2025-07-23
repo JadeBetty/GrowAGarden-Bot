@@ -24,12 +24,10 @@ async function handleUserDMs(stockData, client) {
       return Math.floor(nextExpiry5.getTime() / 1000);
     }
   }
-
   for (const entry of allGuildKeys) {
     const guildData = entry.value;
     for (const category of ["seed", "gear", "egg"]) {
       const categoryItems = guildData[category] || {};
-
       for (const itemName in categoryItems) {
         const hasItem = checkForItem(stockData, itemName);
         if (hasItem) {

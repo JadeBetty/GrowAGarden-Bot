@@ -43,6 +43,7 @@ async function handleUpdate(parsed) {
             .map((i) => ({
               name: i.display_name,
               stock: i.quantity.toString(),
+              id: i.item_id.toLowerCase().replace(/_/g, "-"),
             }));
 
         const updatedAt =
@@ -52,23 +53,20 @@ async function handleUpdate(parsed) {
         const stock = {
           updatedAt,
           gear: formatItemList(partialSGStock.gear || []),
-          seeds: formatItemList(partialSGStock.seed || []),
+          seed: formatItemList(partialSGStock.seed || []),
           egg: formatItemList(partialSGStock.egg || []),
         };
 
         const embed = await BuildEmbeds("SGE", stock);
         const newlyAvailable = [];
 
-        if (lastSGStockData !== null) {
-          for (const cat of ["seeds", "gear", "egg"]) {
-            for (const item of stock[cat]) {
-              const wasMissing = !lastSGStockData[cat].some(
-                (i) => i.name === item.name
-              );
-              if (wasMissing) {
-                newlyAvailable.push({ category: cat, name: item.name });
-              }
-            }
+        for (const cat of ["seed", "gear", "egg"]) {
+          for (const item of stock[cat]) {
+            newlyAvailable.push({
+              category: cat,
+              name: item.name.toLowerCase(),
+              id: item.id,
+            });
           }
         }
 
@@ -76,18 +74,52 @@ async function handleUpdate(parsed) {
         const roleTargets = [];
         const all = await db.all();
 
+        const roleTargetSet = new Set();
+
         for (const entry of all) {
           if (!entry.id.startsWith("guild_")) continue;
+
           const guildId = entry.id.split("_")[1];
           const guildData = entry.value;
 
-          for (const { category, name } of newlyAvailable) {
-            const key = `${category}.${name.toLowerCase()}`;
-            const sub = guildData[category]?.[name.toLowerCase()];
-            if (sub) {
-              (sub.users || []).forEach((u) => userIds.add(u));
-              if (sub.role) {
-                roleTargets.push({ guildId, roleId: sub.role, item: key });
+          for (const { category, name, id } of newlyAvailable) {
+            const categoryData = guildData[category];
+            if (!categoryData) continue;
+
+            let matchedKey = Object.keys(categoryData).find(
+              (key) => key.toLowerCase() === id
+            );
+
+            if (!matchedKey) {
+              const [firstPart, secondPart] = id.split("-");
+
+              matchedKey = Object.keys(categoryData).find(
+                (key) =>
+                  key.toLowerCase() === firstPart?.toLowerCase() ||
+                  key.toLowerCase() === secondPart?.toLowerCase()
+              );
+              if (!matchedKey) {
+                // console.warn(
+                //   `⚠️ Not found in DB: ${category}.${id} for guild ${guildId}`
+                // );
+                continue;
+              }
+            }
+
+            const sub = categoryData[matchedKey];
+            if (!sub) continue;
+
+            (sub.users || []).forEach((u) => userIds.add(u));
+
+            if (sub.role) {
+              const uniqueKey = `${guildId}-${sub.role}`;
+              if (!roleTargetSet.has(uniqueKey)) {
+                roleTargetSet.add(uniqueKey);
+                roleTargets.push({
+                  guildId,
+                  roleId: sub.role,
+                  item: `${category}.${matchedKey}`,
+                });
               }
             }
           }
@@ -106,7 +138,7 @@ async function handleUpdate(parsed) {
         });
 
         lastSGStockData = {
-          seeds: [...stock.seeds],
+          seed: [...stock.seed],
           gear: [...stock.gear],
           egg: [...stock.egg],
         };
@@ -137,29 +169,55 @@ async function handleUpdate(parsed) {
         type: "weather",
       });
     } else if (parsed.travelingmerchant_stock) {
-    const merchant = (parsed.travelingmerchant_stock || [])
-      .filter((item) => item.quantity !== 0)
-      .map((i) => ({
-        name: i.display_name,
-        stock: i.quantity.toString(),
-        icon: i.icon,
-      }));
+      const merchantData = parsed.travelingmerchant_stock;
+      const merchant = {
+        merchantName: merchantData?.merchantName || "Unknown",
+        updatedAt:
+          merchantData?.stock?.[0]?.start_date_unix ||
+          Math.floor(Date.now() / 1000),
+        stock: (merchantData?.stock || [])
+          .filter((item) => item.quantity !== 0)
+          .map((i) => ({
+            name: i.display_name,
+            stock: i.quantity.toString(),
+            icon: i.icon,
+          })),
+      };
 
-    const stock = {
-      merchant: merchant,
-      updatedAt: Math.floor(Date.now() / 1000),
-    };
+      const stock = {
+        merchantName: merchant.merchantName,
+        stock: merchant.stock,
+        updatedAt: merchant.updatedAt || Math.floor(Date.now() / 1000),
+      };
 
-    const embed = BuildEmbeds("TMS", stock);
-    resolve({
-      embed,
-      stock,
-      type: "TMS"
-    })
-  }
+      const embed = BuildEmbeds("TMS", stock);
+      resolve({
+        embed,
+        stock,
+        type: "TMS",
+      });
+    } else if (parsed.eventshop_stock) {
+      const eventData = parsed.eventshop_stock;
+      const stock = {
+        stock: (eventData || [])
+          .filter((item) => item.quantity !== 0)
+          .map((i) => ({
+            name: i.display_name,
+            stock: i.quantity.toString(),
+            icon: i.icon,
+          })),
+        updatedAt:
+          eventData[0].start_date_unix || Math.floor(Date.now() / 1000),
+      };
+
+      const embed = BuildEmbeds("EVENT", stock);
+      resolve({
+        embed,
+        stock,
+        type: "EVENT",
+      });
+    }
   });
-
-  
 }
 
 module.exports = {

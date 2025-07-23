@@ -2,8 +2,8 @@ const { time, TimestampStyles, EmbedBuilder } = require("discord.js");
 
 async function BuildEmbeds(type, stock) {
   if (type === "SGE") {
-    const seeds =
-      (stock.seeds || [])
+    const seed =
+      (stock.seed || [])
         .map((item) => `**x${item.stock}** ${getStockEmoji(item.name)} ${item.name}`)
         .join("\n") || "None";
 
@@ -29,7 +29,7 @@ async function BuildEmbeds(type, stock) {
       .setColor(0x7be551)
       .setTitle(`Grow a Garden Stock - ${formattedTime}`)
       .addFields(
-        { name: "🌱 Seed Stock", value: seeds },
+        { name: "🌱 Seed Stock", value: seed },
         { name: "⚙️ Gear Stock", value: gear },
         { name: "🥚 Egg Stock", value: egg }
       )
@@ -38,28 +38,6 @@ async function BuildEmbeds(type, stock) {
       )
       .setFooter({
         text: "Grow A Garden",
-        iconURL:
-          "https://tr.rbxcdn.com/180DAY-1db1ca86a77e30e87e2ffa3e38b8aece/256/256/Image/Webp/noFilter",
-      })
-      .setTimestamp();
-  } else if (type === "MERCHANT") {
-    const merchant =
-      (stock.merchant || [])
-        .map((item) => `**x${item.stock}** ${item.name}`)
-        .join("\n") || "None";
-
-    const updatedAtSeconds = Math.floor(Date.now() / 1000);
-    const formattedTime = time(updatedAtSeconds, TimestampStyles.ShortTime);
-
-    return new EmbedBuilder()
-      .setColor(0x50c878)
-      .setTitle(`🛒 Traveling Merchant Stock - ${formattedTime}`)
-      .addFields({ name: "Available Items", value: merchant })
-      .setThumbnail(
-        "https://tr.rbxcdn.com/180DAY-1db1ca86a77e30e87e2ffa3e38b8aece/256/256/Image/Webp/noFilter"
-      )
-      .setFooter({
-        text: "Grow A Garden - Traveling Merchant",
         iconURL:
           "https://tr.rbxcdn.com/180DAY-1db1ca86a77e30e87e2ffa3e38b8aece/256/256/Image/Webp/noFilter",
       })
@@ -105,7 +83,7 @@ async function BuildEmbeds(type, stock) {
       .setTimestamp();
   } else if (type === "TMS") {
     const merchant =
-      (stock.merchant || [])
+      (stock.stock || [])
         .map((item) => `**x${item.stock}** ${item.name}`)
         .join("\n") || "None";
 
@@ -114,13 +92,35 @@ async function BuildEmbeds(type, stock) {
 
     return new EmbedBuilder()
       .setColor(0x50c878)
-      .setTitle(`🛒 Traveling Merchant Stock - ${formattedTime}`)
+      .setTitle(`🛒 ${stock.merchantName} Stock - ${formattedTime}`)
       .addFields({ name: "Available Items", value: merchant })
       .setThumbnail(
         "https://tr.rbxcdn.com/180DAY-1db1ca86a77e30e87e2ffa3e38b8aece/256/256/Image/Webp/noFilter"
       )
       .setFooter({
         text: "Grow A Garden - Traveling Merchant",
+        iconURL:
+          "https://tr.rbxcdn.com/180DAY-1db1ca86a77e30e87e2ffa3e38b8aece/256/256/Image/Webp/noFilter",
+      })
+      .setTimestamp();
+  } else if (type === "EVENT") {
+     const event =
+      (stock.stock || [])
+        .map((item) => `**x${item.stock}** ${item.name}`)
+        .join("\n") || "None";
+
+    const updatedAtSeconds = Math.floor(Date.now() / 1000);
+    const formattedTime = time(updatedAtSeconds, TimestampStyles.ShortTime);
+
+    return new EmbedBuilder()
+      .setColor(0x50c878)
+      .setTitle(`:man_in_lotus_position: Event Stock - ${formattedTime}`)
+      .addFields({ name: "Available Items", value: event })
+      .setThumbnail(
+        "https://tr.rbxcdn.com/180DAY-1db1ca86a77e30e87e2ffa3e38b8aece/256/256/Image/Webp/noFilter"
+      )
+      .setFooter({
+        text: "Grow A Garden - Event Stock",
         iconURL:
           "https://tr.rbxcdn.com/180DAY-1db1ca86a77e30e87e2ffa3e38b8aece/256/256/Image/Webp/noFilter",
       })
