@@ -1,5 +1,5 @@
 {
-  "clientId": "1381642851208921180",
+  "clientId": "",
   "choices": [
     { "name": "Sugar Apple", "value": "seed.sugar" },
     { "name": "Cacao", "value": "seed.cacao"},
@@ -18,7 +18,7 @@
     { "name": "Tanning Mirror", "value": "gear.mirror" },
     { "name": "Medium Toy", "value": "gear.toy"},
     { "name": "Medium Treat", "value": "gear.treat"},
-    { "name": "Levelup lolipop", "value": "gear.lolipop"},
+    { "name": "Levelup lollipop", "value": "gear.lollipop"},
     { "name": "Bug Egg", "value": "egg.bug" },
     { "name": "Mythical Egg", "value": "egg.mythical" },
     { "name": "Paradise Egg", "value": "egg.paradise" },
