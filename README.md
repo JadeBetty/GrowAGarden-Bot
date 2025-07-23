@@ -15,6 +15,11 @@ Currently I'm using websocket, but if you look at the bot's first commits, it us
 - Run the boy by node src/index.js or using nodemon src/index.js
 - Give a star for this github repo :D
 
+
+# Join my stock server
+
+https://discord.gg/XXyq3NYe
+
 # WARNINGS
 I am not responsible in anyway where the bot goes down. You may fork this bot knowing that errors should be fixed yourself. If you want, you can let me know about issues or errors on the issues page in the Github Repository.
 
