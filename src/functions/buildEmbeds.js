@@ -100,7 +100,7 @@ async function BuildEmbeds(type, stock) {
       .setTitle(`🛒 ${stock.merchantName} Stock - ${formattedTime}`)
       .addFields({ name: "Available Items", value: merchant })
       .setThumbnail(
-        "https://tr.rbxcdn.com/180DAY-1db1ca86a77e30e87e2ffa3e38b8aece/256/256/Image/Webp/noFilter"
+        url
       )
       .setFooter({
         text: "Grow A Garden - Traveling Merchant",
@@ -122,7 +122,7 @@ async function BuildEmbeds(type, stock) {
       .setTitle(`:man_in_lotus_position: Event Stock - ${formattedTime}`)
       .addFields({ name: "Available Items", value: event })
       .setThumbnail(
-        "https://tr.rbxcdn.com/180DAY-1db1ca86a77e30e87e2ffa3e38b8aece/256/256/Image/Webp/noFilter"
+        url
       )
       .setFooter({
         text: "Grow A Garden - Event Stock",
@@ -147,7 +147,7 @@ async function BuildEmbeds(type, stock) {
       .setTitle(`:mega: Jandel Message - ${formattedTime}`)
       .setDescription(`${description}`)
       .setThumbnail(
-        "https://tr.rbxcdn.com/180DAY-1db1ca86a77e30e87e2ffa3e38b8aece/256/256/Image/Webp/noFilter"
+        url
       )
       .setFooter({
         text: "Notification",
