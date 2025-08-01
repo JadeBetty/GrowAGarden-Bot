@@ -2,7 +2,7 @@ const { BuildEmbeds } = require("./buildEmbeds");
 const { getWeatherInfo } = require("./getWeatherInfo");
 const { QuickDB } = require("quick.db");
 const db = new QuickDB();
-
+const { key } = require("../../config.json");
 const partialSGStock = {
   seed: null,
   gear: null,
@@ -161,7 +161,7 @@ async function handleUpdate(parsed) {
 
       const embed = [];
       for (const w of activeWeather) {
-        const weatherInfo = await getWeatherInfo(w.id);
+        const weatherInfo = await getWeatherInfo(w.id, key);
         embed.push(await BuildEmbeds("WEATHER", weatherInfo));
       }
       resolve({

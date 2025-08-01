@@ -20,40 +20,45 @@ module.exports = {
     )
     .addStringOption((option) =>
       option
+        .setName("type")
+        .setDescription("The category type")
+        .setRequired(true)
+        .addChoices(
+          { name: "Seed", value: "seed" },
+          { name: "Gear", value: "gear" },
+          { name: "Egg", value: "egg" }
+        )
+    )
+    .addStringOption((option) =>
+      option
         .setName("item")
         .setDescription("The item")
         .setRequired(true)
         .setAutocomplete(true)
     )
-    .setContexts(0)
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
 
   async run(__, interaction) {
     const role = interaction.options.getRole("role");
-    const input = interaction.options.getString("item").toLowerCase();
-    const [category, item] = input.split(".");
+    const type = interaction.options.getString("type");
+    const item = interaction.options.getString("item");
 
-    if (!category || !item) {
-      return interaction.reply({
-        content: "❌ Invalid format. Use the provided choices.",
-        flags: [MessageFlags.Ephemeral],
-      });
-    }
+    const input = `${type}.${item}`;
 
     const guildid = interaction.guildId;
     let guildData = await db.get(`guild_${guildid}`);
     if (!guildData) guildData = {};
 
-    if (!guildData[category]) guildData[category] = {};
-    if (!guildData[category][item]) {
-      guildData[category][item] = { users: [], role: "" };
+    if (!guildData[type]) guildData[type] = {};
+    if (!guildData[type][item]) {
+      guildData[type][item] = { users: [], role: "" };
     }
-    guildData[category][item].role = role.id;
+    guildData[type][item].role = role.id;
 
     await db.set(`guild_${guildid}`, guildData);
+
     const pretty =
-      config.choices.find((choice) => choice.value === input)?.name ||
-      `${category}.${item}`;
+      config.choices.find((choice) => choice.value === input)?.name || input;
 
     interaction.reply({
       content: `✅ Set <@&${role.id}> as the role to mention for **${pretty}**`,
@@ -63,9 +68,18 @@ module.exports = {
 
   async autocomplete(__, interaction) {
     const focusedValue = interaction.options.getFocused();
-    const filtered = config.choices.filter((choice) =>
-      choice.name.toLowerCase().startsWith(focusedValue.toLowerCase())
-    );
-    await interaction.respond(filtered);
+    const type = interaction.options.getString("type");
+
+    const filtered = config.choices
+      .filter((choice) => choice.value.startsWith(`${type}.`))
+      .filter((choice) =>
+        choice.name.toLowerCase().includes(focusedValue.toLowerCase())
+      )
+      .map((choice) => ({
+        name: choice.name,
+        value: choice.value.split(".")[1],
+      }));
+
+    await interaction.respond(filtered.slice(0, 25));
   },
 };
