@@ -9,6 +9,7 @@ const {
 } = require("./discordClient.js");
 const { handleUserDMs } = require("./handleUserDMs.js");
 const { canSendPing, getClient, sleep } = require("./helpers.js");
+
 function startWebsocket() {
   const client = getClient();
   const ws = new WebSocket(
@@ -64,7 +65,7 @@ function startWebsocket() {
       }
 
       if (Data.type === "weather") {
-        if (Data.activeWeather.length === 0 || !Data.activeWeather) {
+        if (Data.activeWeather.length === 0) {
           return logger.warn("[Weather] Seems like no weather is found");
         }
         await loadGuildChannelsCache();
