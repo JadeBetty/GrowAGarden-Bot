@@ -46,7 +46,8 @@ async function handleUserDMs(stockData, client) {
           const expiryUnix = getExpiryUnix(category);
 
           for (const userId of users) {
-            const user = await client.users.fetch(userId).catch(() => null);
+            // const user = await client.users.fetch("758617912566087681").catch(() => null); 
+            const user = null;
             if (user) {
               await user.send(
                 `🔔 **${pretty}** is now in stock!\n⏰ Expires at: <t:${expiryUnix}:t>`

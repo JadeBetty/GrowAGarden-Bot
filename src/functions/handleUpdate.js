@@ -148,7 +148,8 @@ async function handleUpdate(parsed) {
         receivedEgg = false;
         debounceTimer = null;
       }, 750);
-    } else if (parsed.weather) {
+    }
+    if (parsed.weather) {
       let activeWeather = parsed.weather
         .filter((w) => w.active === true)
         .map((w) => ({
@@ -168,7 +169,8 @@ async function handleUpdate(parsed) {
         activeWeather,
         type: "weather",
       });
-    } else if (parsed.travelingmerchant_stock) {
+    }
+    if (parsed.travelingmerchant_stock) {
       const merchantData = parsed.travelingmerchant_stock;
       const merchant = {
         merchantName: merchantData?.merchantName || "Unknown",
@@ -190,13 +192,14 @@ async function handleUpdate(parsed) {
         updatedAt: merchant.updatedAt || Math.floor(Date.now() / 1000),
       };
 
-      const embed = BuildEmbeds("TMS", stock);
+      const embed = await BuildEmbeds("TMS", stock);
       resolve({
         embed,
         stock,
         type: "TMS",
       });
-    } else if (parsed.eventshop_stock) {
+    }
+    if (parsed.eventshop_stock) {
       const eventData = parsed.eventshop_stock;
       const stock = {
         stock: (eventData || [])
@@ -210,11 +213,24 @@ async function handleUpdate(parsed) {
           eventData[0].start_date_unix || Math.floor(Date.now() / 1000),
       };
 
-      const embed = BuildEmbeds("EVENT", stock);
+      const embed = await BuildEmbeds("EVENT", stock);
       resolve({
         embed,
         stock,
         type: "EVENT",
+      });
+    }
+
+    if(parsed.notification) {
+      const notification = parsed.notification.map((msg) => ({
+        message: msg.message,
+        timestamp: msg.timestamp
+      }));
+      const embed = await BuildEmbeds("NOTIFICATION", notification);
+      resolve({
+        embed,
+        notification,
+        type: "NOTIFICATION"
       });
     }
   });

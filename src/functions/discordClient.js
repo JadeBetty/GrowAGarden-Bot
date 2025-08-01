@@ -19,6 +19,7 @@ async function loadGuildChannelsCache() {
   logger.info(
     `[Cache] Loaded guild channels cache: ${guildChannelsCache.size} guilds.`
   );
+  console.log(guildChannelsCache)
 }
 
 async function sendToChannel(channelId, content, embeds, client) {

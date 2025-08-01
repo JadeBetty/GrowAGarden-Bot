@@ -1,5 +1,7 @@
 {
   "clientId": "",
+  "key": "",
+  "url": "https://tr.rbxcdn.com/180DAY-de7ea54f72d2b351ddee873358610706/256/256/Image/Webp/noFilter",
   "choices": [
     { "name": "Sugar Apple", "value": "seed.sugar" },
     { "name": "Cacao", "value": "seed.cacao"},

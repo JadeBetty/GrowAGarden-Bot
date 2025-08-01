@@ -1,6 +1,6 @@
 const WebSocket = require("ws");
 const { logger } = require("console-wizard");
-const { clientId } = require("../../config.json");
+const { clientId, key } = require("../../config.json");
 const { handleUpdate } = require("./handleUpdate");
 const {
   sendToChannel,
@@ -8,14 +8,18 @@ const {
   guildChannelsCache,
 } = require("./discordClient.js");
 const { handleUserDMs } = require("./handleUserDMs.js");
-const { canSendPing, getClient } = require("./helpers.js");
-
+const { canSendPing, getClient, sleep } = require("./helpers.js");
 function startWebsocket() {
   const client = getClient();
   const ws = new WebSocket(
     `wss://websocket.joshlei.com/growagarden?user_id=${encodeURIComponent(
       clientId
-    )}`
+    )}`,
+    {
+      headers: {
+        "jstudio-key": key,
+      },
+    }
   );
 
   ws.on("open", () => {
@@ -42,7 +46,6 @@ function startWebsocket() {
           }
 
           const rolesToPing = [];
-
           for (const target of Data.alert.roleTargets) {
             if (target.guildId !== guildId) continue;
             const category = target.item.split(".")[0];
@@ -50,6 +53,7 @@ function startWebsocket() {
               rolesToPing.push(`<@&${target.roleId}>`);
             }
           }
+
           const pingContent = rolesToPing.length ? rolesToPing.join(" ") : null;
           await sendToChannel(stockChannelId, pingContent, Data.embed, client);
           await handleUserDMs(Data, client);
@@ -57,10 +61,14 @@ function startWebsocket() {
             `[Stock] Sent stock embed & pings for guild ${guildId}`
           );
         }
-      } if (Data.type === "weather") {
-        if (Data.activeWeather.length === 0 || Data.activeWeather)
+      }
+
+      if (Data.type === "weather") {
+        if (Data.activeWeather.length === 0 || !Data.activeWeather) {
           return logger.warn("[Weather] Seems like no weather is found");
+        }
         await loadGuildChannelsCache();
+        sleep(100);
         for (const [
           guildId,
           { weatherChannelId },
@@ -71,7 +79,10 @@ function startWebsocket() {
           }
           await sendToChannel(weatherChannelId, null, Data.embed, client);
         }
-      } if (Data.type === "TMS") {
+      }
+
+      if (Data.type === "TMS") {
+        loadGuildChannelsCache();
         for (const [
           guildId,
           { eventChannelId },
@@ -83,8 +94,13 @@ function startWebsocket() {
             continue;
           }
           await sendToChannel(eventChannelId, null, Data.embed, client);
+          console.log("Successfully sent traveling merchant stock.");
         }
-      } if (Data.type === "EVENT") {
+      }
+
+      if (Data.type === "EVENT") {
+        loadGuildChannelsCache();
+        sleep(100);
         for (const [
           guildId,
           { eventChannelId },
@@ -92,6 +108,23 @@ function startWebsocket() {
           if (!eventChannelId) {
             logger.warn(
               `[Stock] No event stock channel set for guild ${guildId}`
+            );
+            continue;
+          }
+          await sendToChannel(eventChannelId, null, Data.embed, client);
+        }
+      }
+
+      if (Data.type === "NOTIFICATION") {
+        loadGuildChannelsCache();
+        sleep(100);
+        for (const [
+          guildId,
+          { eventChannelId },
+        ] of guildChannelsCache.entries()) {
+          if (!eventChannelId) {
+            logger.warn(
+              `[Stock] No NOTIFICATION channel set for guild ${guildId}`
             );
             continue;
           }
