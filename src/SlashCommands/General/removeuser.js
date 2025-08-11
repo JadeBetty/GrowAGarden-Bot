@@ -67,11 +67,15 @@ module.exports = {
   },
 
   async autocomplete(__, interaction, config) {
-    if(!config) return interaction.respond([]);
-    const focusedValue = interaction.options.getFocused();
-    const filtered = config.choices.filter((choice) =>
-      choice.name.toLowerCase().startsWith(focusedValue.toLowerCase())
-    );
-    await interaction.respond(filtered);
+    if (!config) return interaction.respond([]);
+    const focusedValue = interaction.options.getFocused().toLowerCase();
+    const filtered = config.choices
+      .filter((choice) => choice.name.toLowerCase().includes(focusedValue))
+      .slice(0, 25);
+    const response = filtered.map((choice) => ({
+      name: choice.name,
+      value: choice.value,
+    }));
+    await interaction.respond(response);
   },
 };
