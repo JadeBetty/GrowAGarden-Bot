@@ -7,7 +7,6 @@ const {
 } = require("discord.js");
 const { QuickDB } = require("quick.db");
 const db = new QuickDB();
-const config = require("../../../config.json");
 const { getEmoji } = require("../../functions");
 
 function buildSelectMenu(category, items) {
@@ -39,9 +38,10 @@ module.exports = {
   category: "General",
   data: new SlashCommandBuilder()
     .setName("adduser")
-    .setDescription("Pick what item you want the bot to DM."),
+    .setDescription("Pick what item you want the bot to DM.")
+    .setContexts(0),
 
-  async run(client, interaction) {
+  async run(client, interaction, config) {
     const grouped = {
       seed: [],
       gear: [],
@@ -63,7 +63,7 @@ module.exports = {
       flags: [MessageFlags.Ephemeral],
     });
   },
-async select(client, interaction) {
+async select(client, interaction, config) {
   const userId = interaction.user.id;
   const guildId = interaction.guildId;
   let guildData = await db.get(`guild_${guildId}`);

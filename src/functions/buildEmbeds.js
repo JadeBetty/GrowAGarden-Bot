@@ -1,5 +1,6 @@
 const { time, TimestampStyles, EmbedBuilder } = require("discord.js");
 const { url } = require("../../config.json");
+let lastMessages = [];
 async function BuildEmbeds(type, stock) {
   if (type === "SGE") {
     const seed =
@@ -99,9 +100,7 @@ async function BuildEmbeds(type, stock) {
       .setColor(0x50c878)
       .setTitle(`🛒 ${stock.merchantName} Stock - ${formattedTime}`)
       .addFields({ name: "Available Items", value: merchant })
-      .setThumbnail(
-        url
-      )
+      .setThumbnail(url)
       .setFooter({
         text: "Grow A Garden - Traveling Merchant",
         iconURL: url,
@@ -121,9 +120,7 @@ async function BuildEmbeds(type, stock) {
       .setColor(0x50c878)
       .setTitle(`:man_in_lotus_position: Event Stock - ${formattedTime}`)
       .addFields({ name: "Available Items", value: event })
-      .setThumbnail(
-        url
-      )
+      .setThumbnail(url)
       .setFooter({
         text: "Grow A Garden - Event Stock",
         iconURL: url,
@@ -134,21 +131,28 @@ async function BuildEmbeds(type, stock) {
   if (type === "NOTIFICATION") {
     const updatedAtSeconds = Math.floor(Date.now() / 1000);
     const formattedTime = time(updatedAtSeconds, TimestampStyles.ShortTime);
-    const description = Array.isArray(stock)
-      ? stock
-          .map(
-            (item, index) =>
-              `**Message ${index + 1}:** ${item.message || "None"}`
-          )
+    let newMessages = [];
+    if (Array.isArray(stock)) {
+      newMessages = stock
+        .map((item) => item.message || "None")
+        .filter((msg) => !lastMessages.includes(msg));
+      lastMessages = newMessages;
+    }
+    let description = Array.isArray(newMessages)
+      ? newMessages
+          .map((msg, index) => `**Message ${index + 1}:** ${msg}`)
           .join("\n")
       : stock.message || "Nothing...?";
+
+    if (description.length > 4096) {
+      description = description.slice(0, 4093) + "...";
+    }
+
     return new EmbedBuilder()
       .setColor(0x50c878)
       .setTitle(`:mega: Jandel Message - ${formattedTime}`)
-      .setDescription(`${description}`)
-      .setThumbnail(
-        url
-      )
+      .setDescription(description || "Nothing new.")
+      .setThumbnail(url)
       .setFooter({
         text: "Notification",
         iconURL: url,
@@ -201,7 +205,8 @@ function getStockEmoji(name) {
   const lower = name.toLowerCase();
   if (lower.includes("advanced sprinkler"))
     return "<:advanced_sprinkler:1395370033101799494>";
-  if(lower.includes("elder strawberry")) return "<:elder_strawberry:1400819244400378019>";
+  if (lower.includes("elder strawberry"))
+    return "<:elder_strawberry:1400819244400378019>";
   if (lower.includes("apple")) return "<:apple:1395370059664326656>";
   if (lower.includes("bamboo")) return "<:bamboo:1395370072503222354>";
   if (lower.includes("basic sprinkler"))
@@ -272,6 +277,8 @@ function getStockEmoji(name) {
   if (lower.includes("watering can"))
     return "<:watering_can:1395370603409576026>";
   if (lower.includes("watermelon")) return "<:watermelon:1395370616282026085>";
+  if (lower.includes("trading ticket"))
+    return "<:trading_ticket:1401146315894816869>";
   return "❓";
 }
 

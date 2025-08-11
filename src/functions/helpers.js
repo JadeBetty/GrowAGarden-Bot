@@ -12,8 +12,9 @@ function checkForItem(stockData, keyword) {
     ...(stockData.stock.gear || []),
     ...(stockData.stock.egg || []),
   ];
-  return all.some((item) =>
-    item.name.toLowerCase().includes(keyword.toLowerCase())
+  return (
+    all.some((item) => item.name.toLowerCase() === keyword.toLowerCase()) ||
+    all.some((item) => item.name.toLowerCase().includes(keyword.toLowerCase()))
   );
 }
 async function collectRolesToPing(stockData) {
@@ -53,8 +54,6 @@ function resolveItemName(category, key) {
   return match?.name || key;
 }
 
-
-
 function isInWindow(category) {
   const now = new Date();
   const mins = now.getMinutes();
@@ -90,7 +89,6 @@ async function canSendPing(guildId, roleId, category) {
   return true;
 }
 
-
 let client = null;
 function setClient(c) {
   client = c;
@@ -99,13 +97,11 @@ function getClient() {
   return client;
 }
 
-
-
 module.exports = {
   sleep,
   checkForItem,
   collectRolesToPing,
   canSendPing,
   setClient,
-  getClient
+  getClient,
 };

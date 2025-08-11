@@ -5,7 +5,6 @@ const {
 } = require("discord.js");
 const { QuickDB } = require("quick.db");
 const db = new QuickDB();
-const config = require("../../../config.json");
 
 module.exports = {
   category: "General",
@@ -36,9 +35,10 @@ module.exports = {
         .setRequired(true)
         .setAutocomplete(true)
     )
+    .setContexts(0)
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
 
-  async run(__, interaction) {
+  async run(__, interaction, config) {
     const role = interaction.options.getRole("role");
     const type = interaction.options.getString("type");
     const item = interaction.options.getString("item");
@@ -66,7 +66,8 @@ module.exports = {
     });
   },
 
-  async autocomplete(__, interaction) {
+  async autocomplete(__, interaction, config) {
+    if(!config) return interaction.respond([]);
     const focusedValue = interaction.options.getFocused();
     const type = interaction.options.getString("type");
 
