@@ -60,6 +60,28 @@ module.exports = {
     )
     .addSubcommand((sub) =>
       sub.setName("list").setDescription("List all choices in config.json")
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName("setuserdm")
+        .setDescription("Enable or disable user DMs")
+        .addBooleanOption((option) =>
+          option
+            .setName("enabled")
+            .setDescription("Enable user DMs?")
+            .setRequired(true)
+        )
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName("setstockembed")
+        .setDescription("Enable or disable stock embed")
+        .addBooleanOption((option) =>
+          option
+            .setName("enabled")
+            .setDescription("Enable stock embeds?")
+            .setRequired(true)
+        )
     ),
 
   async run(client, interaction) {
@@ -168,11 +190,45 @@ module.exports = {
         flags: [MessageFlags.Ephemeral],
       });
     }
+
+    if (subcommand === "setuserdm") {
+      const enabled = interaction.options.getBoolean("enabled");
+      if (typeof config.userdms !== "boolean") {
+        config.userdms = false;
+      }
+      config.userdms = enabled;
+
+      fs.writeFileSync(configPath, JSON.stringify(config, null, 2), "utf8");
+
+      return interaction.reply({
+        content: `✅ User DMs have been **${
+          enabled ? "enabled" : "disabled"
+        }**.`,
+        flags: [MessageFlags.Ephemeral],
+      });
+    }
+
+    if (subcommand === "setstockembed") {
+      const enabled = interaction.options.getBoolean("enabled");
+      if (typeof config.stockembed !== "boolean") {
+        config.stockembed = false;
+      }
+      config.stockembed = enabled;
+
+      fs.writeFileSync(configPath, JSON.stringify(config, null, 2), "utf8");
+
+      return interaction.reply({
+        content: `✅ Stock embeds have been **${
+          enabled ? "enabled" : "disabled"
+        }**.`,
+        flags: [MessageFlags.Ephemeral],
+      });
+    }
   },
   async autocomplete(client, interaction, config) {
     const focusedOption = interaction.options.getFocused(true);
     if (focusedOption.name !== "value") return interaction.respond([]);
-    if(!config) return interaction.respond([]);
+    if (!config) return interaction.respond([]);
 
     const filtered = config.choices
       .filter((choice) =>

@@ -34,33 +34,58 @@ function startWebsocket() {
       if (!Data || !Data.type)
         return logger.warn("[Stock] Data returned null.");
 
+      let config;
+      try {
+        config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+      } catch (err) {
+        logger.error("[Config] Failed to load config.json, using defaults");
+        config = {};
+      }
+
       if (Data.type === "SGE") {
         logger.info("[Stock] Detected new stock.");
         await loadGuildChannelsCache();
-        for (const [
-          guildId,
-          { stockChannelId },
-        ] of guildChannelsCache.entries()) {
-          if (!stockChannelId) {
-            logger.warn(`[Stock] No stock channel set for guild ${guildId}`);
-            continue;
-          }
 
-          const rolesToPing = [];
-          for (const target of Data.alert.roleTargets) {
-            if (target.guildId !== guildId) continue;
-            const category = target.item.split(".")[0];
-            if (await canSendPing(guildId, target.roleId, category)) {
-              rolesToPing.push(`<@&${target.roleId}>`);
+        if (config.stockembed === false) {
+          logger.warn("[Stock] Stock embeds are disabled in config.json");
+        } else {
+          for (const [
+            guildId,
+            { stockChannelId },
+          ] of guildChannelsCache.entries()) {
+            if (!stockChannelId) {
+              logger.warn(`[Stock] No stock channel set for guild ${guildId}`);
+              continue;
             }
-          }
 
-          const pingContent = rolesToPing.length ? rolesToPing.join(" ") : null;
-          await sendToChannel(stockChannelId, pingContent, Data.embed, client);
+            const rolesToPing = [];
+            for (const target of Data.alert.roleTargets) {
+              if (target.guildId !== guildId) continue;
+              const category = target.item.split(".")[0];
+              if (await canSendPing(guildId, target.roleId, category)) {
+                rolesToPing.push(`<@&${target.roleId}>`);
+              }
+            }
+
+            const pingContent = rolesToPing.length
+              ? rolesToPing.join(" ")
+              : null;
+            await sendToChannel(
+              stockChannelId,
+              pingContent,
+              Data.embed,
+              client
+            );
+            logger.success(
+              `[Stock] Sent stock embed & pings for guild ${guildId}`
+            );
+          }
+        }
+
+        if (config.userdms !== false) {
           await handleUserDMs(Data, client);
-          logger.success(
-            `[Stock] Sent stock embed & pings for guild ${guildId}`
-          );
+        } else {
+          logger.warn("[UserDM] User DMs are disabled in config.json");
         }
       }
 
