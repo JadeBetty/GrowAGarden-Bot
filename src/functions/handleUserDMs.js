@@ -1,10 +1,19 @@
 const { QuickDB } = require("quick.db");
 const db = new QuickDB();
-const { checkForItem } = require("./helpers.js")
-const config = require("../../config.json");
+const { checkForItem } = require("./helpers.js");
+const fs = require("fs");
+const path = require("path");
+const configPath = path.join(process.cwd(), "config.json");
 const { logger } = require("console-wizard");
 
 async function handleUserDMs(stockData, client) {
+  let config;
+  try {
+    config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+  } catch (err) {
+    logger.error("[Config] Failed to load config.json, using defaults");
+    config = {};
+  }
   const allGuildKeys = await db.all();
   const now = new Date();
   function getExpiryUnix(category) {
@@ -46,7 +55,7 @@ async function handleUserDMs(stockData, client) {
           const expiryUnix = getExpiryUnix(category);
 
           for (const userId of users) {
-            const user = await client.users.fetch(userId).catch(() => null); 
+            const user = await client.users.fetch(userId).catch(() => null);
             if (user) {
               await user.send(
                 `🔔 **${pretty}** is now in stock!\n⏰ Expires at: <t:${expiryUnix}:t>`

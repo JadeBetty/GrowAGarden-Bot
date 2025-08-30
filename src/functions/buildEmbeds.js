@@ -1,13 +1,28 @@
 const { time, TimestampStyles, EmbedBuilder } = require("discord.js");
 const { url } = require("../../config.json");
+const logger = require("console-wizard");
+const fs = require("fs");
+const path = require("path");
+const configPath = path.join(process.cwd(), "config.json");
+
 let lastMessages = [];
 async function BuildEmbeds(type, stock) {
   if (type === "SGE") {
+    let config;
+    try {
+      config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+    } catch (err) {
+      logger.error("[Config] Failed to load config.json, using defaults");
+      config = {};
+    }
+
     const seed =
       (stock.seed || [])
         .map(
           (item) =>
-            `**x${item.stock}** ${getStockEmoji(item.name)} ${item.name}`
+            `**x${item.stock}** ${getStockEmoji(item.name, config)} ${
+              item.name
+            }`
         )
         .join("\n") || "None";
 
@@ -15,7 +30,9 @@ async function BuildEmbeds(type, stock) {
       (stock.gear || [])
         .map(
           (item) =>
-            `**x${item.stock}** ${getStockEmoji(item.name)} ${item.name}`
+            `**x${item.stock}** ${getStockEmoji(item.name, config)} ${
+              item.name
+            }`
         )
         .join("\n") || "None";
 
@@ -23,7 +40,9 @@ async function BuildEmbeds(type, stock) {
       (stock.egg || [])
         .map(
           (item) =>
-            `**x${item.stock}** ${getStockEmoji(item.name)} ${item.name}`
+            `**x${item.stock}** ${getStockEmoji(item.name, config)} ${
+              item.name
+            }`
         )
         .join("\n") || "None";
 
@@ -71,9 +90,18 @@ async function BuildEmbeds(type, stock) {
       .setTimestamp();
   }
   if (type === "WEATHER") {
+    let config;
+    try {
+      config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+    } catch (err) {
+      logger.error("[Config] Failed to load config.json, using defaults");
+      config = {};
+    }
     return new EmbedBuilder()
       .setColor(0x7be551)
-      .setTitle(`${getWeatherEmoji(stock.id)}  Weather Update - ${stock.name}`)
+      .setTitle(
+        `${getWeatherEmoji(stock.id, config)}  Weather Update - ${stock.name}`
+      )
       .setDescription(`${stock.description || "No description."}`)
       .setThumbnail(
         `${
@@ -118,7 +146,7 @@ async function BuildEmbeds(type, stock) {
 
     return new EmbedBuilder()
       .setColor(0x50c878)
-      .setTitle(`:man_in_lotus_position: Event Stock - ${formattedTime}`)
+      .setTitle(`Event Stock - ${formattedTime}`)
       .addFields({ name: "Available Items", value: event })
       .setThumbnail(url)
       .setFooter({
@@ -133,16 +161,27 @@ async function BuildEmbeds(type, stock) {
     const formattedTime = time(updatedAtSeconds, TimestampStyles.ShortTime);
     let newMessages = [];
     if (Array.isArray(stock)) {
-      newMessages = stock
+      const seenThisBatch = new Set();
+      const uniqueThisBatch = stock.filter((item) => {
+        const msg = item.message || "None";
+        if (seenThisBatch.has(msg)) return false;
+        seenThisBatch.add(msg);
+        return true;
+      });
+      newMessages = uniqueThisBatch
         .map((item) => item.message || "None")
         .filter((msg) => !lastMessages.includes(msg));
-      lastMessages = newMessages;
+
+      lastMessages = [...lastMessages, ...newMessages];
+      if (lastMessages.length > 50) lastMessages = lastMessages.slice(-50);
     }
-    let description = Array.isArray(newMessages)
-      ? newMessages
-          .map((msg, index) => `**Message ${index + 1}:** ${msg}`)
-          .join("\n")
-      : stock.message || "Nothing...?";
+
+    let description =
+      Array.isArray(newMessages) && newMessages.length
+        ? newMessages
+            .map((msg, index) => `**Message ${index + 1}:** ${msg}`)
+            .join("\n")
+        : stock.message || "Nothing...?";
 
     if (description.length > 4096) {
       description = description.slice(0, 4093) + "...";
@@ -160,6 +199,27 @@ async function BuildEmbeds(type, stock) {
       .setTimestamp();
   }
 }
+
+function getStockEmoji(name, config) {
+  const lower = name.toLowerCase();
+  for (const key in config.emojis.stock) {
+    if (lower.includes(key)) {
+      return config.emojis.stock[key];
+    }
+  }
+  return "❓";
+}
+
+function getWeatherEmoji(name, config) {
+  const lower = name.toLowerCase();
+  for (const key in config.emojis.weather) {
+    if (lower.includes(key)) {
+      return config.emojis.weather[key];
+    }
+  }
+  return "❓";
+}
+
 
 function getEmoji(name) {
   const lower = name.toLowerCase();
@@ -200,111 +260,6 @@ function getEmoji(name) {
   if (lower.includes("bell pepper")) return ":bell_pepper:";
   return "❓";
 } // only used for the slash command
-
-function getStockEmoji(name) {
-  const lower = name.toLowerCase();
-  if (lower.includes("advanced sprinkler"))
-    return "<:advanced_sprinkler:1395370033101799494>";
-  if (lower.includes("elder strawberry"))
-    return "<:elder_strawberry:1400819244400378019>";
-  if (lower.includes("apple")) return "<:apple:1395370059664326656>";
-  if (lower.includes("bamboo")) return "<:bamboo:1395370072503222354>";
-  if (lower.includes("basic sprinkler"))
-    return "<:basic_sprinkler:1395370082825404447>";
-  if (lower.includes("beanstalk")) return "<:beanstalk:1395370094468792350>";
-  if (lower.includes("blueberry")) return "<:blueberry:1395370104660688976>";
-  if (lower.includes("burning bud"))
-    return "<:burning_bud:1395370114366443661>";
-  if (lower.includes("bug egg")) return "<:bug_egg:1395371376507879475>";
-  if (lower.includes("carrot")) return "<:carrot:1395370144347459695>";
-  if (lower.includes("cacao")) return "<:cacao:1395370125078827049>";
-  if (lower.includes("cactus")) return "<:cactus:1395370134054637588>";
-  if (lower.includes("cleaning spray"))
-    return "<:cleaning_spray:1395370162240229406>";
-  if (lower.includes("coconut")) return "<:coconut:1395370173468508351>";
-  if (lower.includes("corn")) return "<:corn:1395370184784478218>";
-  if (lower.includes("daffodil")) return "<:daffodil:1395370194267930715>";
-  if (lower.includes("common egg")) return "<:common_egg:1395371385613844530>";
-  if (lower.includes("common summer egg"))
-    return "<:common_summer_egg:1395371395537567936>";
-  if (lower.includes("dragon fruit"))
-    return "<:dragon_fruit:1395370205408002189>";
-  if (lower.includes("ember lily")) return "<:ember_lily:1395370219945594911>";
-  if (lower.includes("favorite tool"))
-    return "<:favorite_tool:1395370230783672485>";
-  if (lower.includes("friendship pot"))
-    return "<:friendship_pot:1395370244096131182>";
-  if (lower.includes("giant pinecone"))
-    return "<:giant_pinecone:1395370255483928668>";
-  if (lower.includes("godly sprinkler"))
-    return "<:godly_sprinkler:1395370264396697692>";
-  if (lower.includes("grape")) return "<:grape:1395370272810467418>";
-  if (lower.includes("harvest tool"))
-    return "<:harvest_tool:1395370296210358412>";
-  if (lower.includes("levelup lollipop"))
-    return "<:levelup_lollipop:1395370322030624830>";
-  if (lower.includes("legendary egg"))
-    return "<:legendary_egg:1395371407264845834>:";
-  if (lower.includes("magnifying glass"))
-    return "<:magnifying_glass:1395370335582556170>";
-  if (lower.includes("mango")) return "<:mango:1395370348035313807>";
-  if (lower.includes("master sprinkler"))
-    return "<:master_sprinkler:1395370359393620052>";
-  if (lower.includes("medium toy")) return "<:medium_toy:1395370372819583127>";
-  if (lower.includes("medium treat"))
-    return "<:medium_treat:1395370391723311235>";
-  if (lower.includes("mushroom")) return "<:mushroom:1395370406189338674>";
-  if (lower.includes("mythical egg"))
-    return "<:mythical_egg:1395371424633458728>";
-  if (lower.includes("paradise egg"))
-    return "<:paradise_egg:1395371436524175382>";
-  if (lower.includes("pepper")) return "<:pepper:1395370435528360036>";
-  if (lower.includes("pumpkin")) return "<:pumpkin:1395370446840660048>";
-  if (lower.includes("rare egg")) return "<:rare_egg:1395371448486461520>";
-  if (lower.includes("rare summer egg"))
-    return "<:rare_summer_egg:1395371460163534889>";
-  if (lower.includes("recall wrench"))
-    return "<:recall_wrench:1395370466558083093>";
-  if (lower.includes("strawberry")) return "<:strawberry:1395370496794558694>";
-  if (lower.includes("sugar apple"))
-    return "<:sugar_apple:1395370532072980570>";
-  if (lower.includes("tanning mirror"))
-    return "<:tanning_mirror:1395370546577018932>";
-  if (lower.includes("tomato")) return "<:tomato:1395370569977041078>";
-  if (lower.includes("trowel")) return "<:trowel:1395370587760627762>";
-  if (lower.includes("orange tulip"))
-    return "<:orange_tulip:1395370419237818510>";
-  if (lower.includes("watering can"))
-    return "<:watering_can:1395370603409576026>";
-  if (lower.includes("watermelon")) return "<:watermelon:1395370616282026085>";
-  if (lower.includes("trading ticket"))
-    return "<:trading_ticket:1401146315894816869>";
-  return "❓";
-}
-
-function getWeatherEmoji(name) {
-  const lower = name.toLowerCase();
-  if (lower.includes("rain")) return ":cloud_rain: ";
-  if (lower.includes("thunderstorm")) return ":thunder_cloud_rain:";
-  if (lower.includes("disco")) return "🕺";
-  if (lower.includes("jandelstorm")) return "🐵:cloud_rain: ";
-  if (lower.includes("blackhole")) return "⚫";
-  if (lower.includes("djjhai")) return "🎉";
-  if (lower.includes("nightevent")) return "🌙";
-  if (lower.includes("meteorshower")) return "⭐🚿";
-  if (lower.includes("sungod")) return "☀🐒";
-  if (lower.includes("jandelfloat")) return "🐵";
-  if (lower.includes("chocolaterain")) return "🍫:cloud_rain: ";
-  if (lower.includes("volcano")) return "🌋";
-  if (lower.includes("alieninvasion")) return "👽";
-  if (lower.includes("spacetravel")) return "🚀";
-  if (lower.includes("windy")) return "🍃";
-  if (lower.includes("heatwave")) return "🥵";
-  if (lower.includes("tornado")) return ":cloud_tornado:";
-  if (lower.includes("frost")) return ":snowflake:";
-  if (lower.includes("zen")) return ":man_in_lotus_position: ";
-  return "❓";
-}
 
 module.exports = {
   BuildEmbeds,

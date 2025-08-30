@@ -82,6 +82,96 @@ module.exports = {
             .setDescription("Enable stock embeds?")
             .setRequired(true)
         )
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName("addemoji")
+        .setDescription("Add a new emoji to stock or weather.")
+        .addStringOption((option) =>
+          option
+            .setName("type")
+            .setDescription("Choose emoji type")
+            .setRequired(true)
+            .addChoices(
+              { name: "Stock Emoji", value: "stock" },
+              { name: "Weather Emoji", value: "weather" }
+            )
+        )
+        .addStringOption((option) =>
+          option
+            .setName("name")
+            .setDescription("The name to add")
+            .setRequired(true)
+        )
+        .addStringOption((option) =>
+          option
+            .setName("emoji")
+            .setDescription("The emoji to assign")
+            .setRequired(true)
+        )
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName("editemoji")
+        .setDescription("Edit an existing emoji.")
+        .addStringOption((option) =>
+          option
+            .setName("type")
+            .setDescription("Choose emoji type")
+            .setRequired(true)
+            .addChoices(
+              { name: "Stock Emoji", value: "stock" },
+              { name: "Weather Emoji", value: "weather" }
+            )
+        )
+        .addStringOption((option) =>
+          option
+            .setName("name")
+            .setDescription("The existing item to edit")
+            .setRequired(true)
+        )
+        .addStringOption((option) =>
+          option
+            .setName("emoji")
+            .setDescription("The new emoji")
+            .setRequired(true)
+        )
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName("deleteemoji")
+        .setDescription("Delete an emoji from stock or weather.")
+        .addStringOption((option) =>
+          option
+            .setName("type")
+            .setDescription("Choose emoji type")
+            .setRequired(true)
+            .addChoices(
+              { name: "Stock Emoji", value: "stock" },
+              { name: "Weather Emoji", value: "weather" }
+            )
+        )
+        .addStringOption((option) =>
+          option
+            .setName("name")
+            .setDescription("The name to delete")
+            .setRequired(true)
+        )
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName("listemojis")
+        .setDescription("List all stock or weather emojis.")
+        .addStringOption((option) =>
+          option
+            .setName("type")
+            .setDescription("Choose emoji type")
+            .setRequired(true)
+            .addChoices(
+              { name: "Stock Emoji", value: "stock" },
+              { name: "Weather Emoji", value: "weather" }
+            )
+        )
     ),
 
   async run(client, interaction) {
@@ -223,6 +313,89 @@ module.exports = {
         }**.`,
         flags: [MessageFlags.Ephemeral],
       });
+    }
+
+    if (
+      ["addemoji", "editemoji", "deleteemoji", "listemojis"].includes(
+        subcommand
+      )
+    ) {
+      const type = interaction.options.getString("type");
+      const name = interaction.options.getString("name")?.toLowerCase();
+      const emoji = interaction.options.getString("emoji");
+      const target = config.emojis[type];
+
+      if (!target) {
+        return interaction.reply({
+          content: `❌ Invalid type: ${type}`,
+          flags: [MessageFlags.Ephemeral],
+        });
+      }
+
+      if (subcommand === "addemoji") {
+        if (target[name]) {
+          return interaction.reply({
+            content: `⚠️ ${type} emoji **${name}** already exists. Use /config editemoji to modify it.`,
+            flags: [MessageFlags.Ephemeral],
+          });
+        }
+        target[name] = emoji;
+        fs.writeFileSync(configPath, JSON.stringify(config, null, 2), "utf8");
+        return interaction.reply({
+          content: `✅ Added ${type} emoji: **${name}** → ${emoji}`,
+          flags: [MessageFlags.Ephemeral],
+        });
+      }
+
+      if (subcommand === "editemoji") {
+        if (!target[name]) {
+          return interaction.reply({
+            content: `❌ ${type} emoji **${name}** does not exist.`,
+            flags: [MessageFlags.Ephemeral],
+          });
+        }
+        target[name] = emoji;
+        fs.writeFileSync(configPath, JSON.stringify(config, null, 2), "utf8");
+        return interaction.reply({
+          content: `✏️ Updated ${type} emoji: **${name}** → ${emoji}`,
+          flags: [MessageFlags.Ephemeral],
+        });
+      }
+
+      if (subcommand === "deleteemoji") {
+        if (!target[name]) {
+          return interaction.reply({
+            content: `❌ ${type} emoji **${name}** not found.`,
+            flags: [MessageFlags.Ephemeral],
+          });
+        }
+        delete target[name];
+        fs.writeFileSync(configPath, JSON.stringify(config, null, 2), "utf8");
+        return interaction.reply({
+          content: `🗑️ Deleted ${type} emoji: **${name}**`,
+          flags: [MessageFlags.Ephemeral],
+        });
+      }
+
+      if (subcommand === "listemojis") {
+        const entries = Object.entries(target);
+        if (!entries.length) {
+          return interaction.reply({
+            content: `⚠️ No ${type} emojis configured.`,
+            flags: [MessageFlags.Ephemeral],
+          });
+        }
+        const embed = new EmbedBuilder()
+          .setTitle(`${type === "stock" ? "Stock" : "Weather"} Emojis`)
+          .setColor(0x7be551)
+          .setDescription(
+            entries.map(([k, v]) => `**${k}** → ${v}`).join("\n")
+          );
+        return interaction.reply({
+          embeds: [embed],
+          flags: [MessageFlags.Ephemeral],
+        });
+      }
     }
   },
   async autocomplete(client, interaction, config) {
