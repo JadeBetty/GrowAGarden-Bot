@@ -9,7 +9,9 @@ const {
 } = require("./discordClient.js");
 const { handleUserDMs } = require("./handleUserDMs.js");
 const { canSendPing, getClient, sleep } = require("./helpers.js");
-
+const fs = require("fs");
+const path = require("path");
+const configPath = path.join(process.cwd(), "config.json");
 function startWebsocket() {
   const client = getClient();
   const ws = new WebSocket(
